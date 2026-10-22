@@ -39,7 +39,18 @@ impl Palette {
                 hsv_to_rgb(h.rem_euclid(1.0), s, v)
             })
             .collect();
-        // Cosine-interpolate around the loop so the palette wraps seamlessly.
+        Self::from_stops(&colors)
+    }
+
+    pub fn random_seeded(seed: u64) -> Self {
+        use rand::SeedableRng;
+        Self::random(&mut rand_chacha::ChaCha8Rng::seed_from_u64(seed))
+    }
+
+    /// A smooth gradient that loops through `colors`, evenly spaced, so the palette
+    /// wraps seamlessly (cosine easing between neighbours).
+    pub fn from_stops(colors: &[[f32; 3]]) -> Self {
+        let keys = colors.len().max(1);
         let entries = (0..PALETTE_SIZE)
             .map(|i| {
                 let p = i as f32 / PALETTE_SIZE as f32 * keys as f32;
@@ -55,6 +66,24 @@ impl Palette {
             })
             .collect();
         Self(entries)
+    }
+
+    /// `count` evenly spaced colors sampled around the loop (the inverse of [`Self::from_stops`]).
+    pub fn sample_stops(&self, count: usize) -> Vec<[f32; 3]> {
+        (0..count)
+            .map(|k| self.sample(k as f64 / count as f64))
+            .collect()
+    }
+
+    pub fn reverse(&mut self) {
+        self.0.reverse();
+    }
+
+    /// Moves the gradient along itself by `fraction` of a loop.
+    pub fn rotate(&mut self, fraction: f32) {
+        let shift = (fraction * PALETTE_SIZE as f32).round() as isize;
+        let n = PALETTE_SIZE as isize;
+        self.0.rotate_left(shift.rem_euclid(n) as usize);
     }
 
     /// Rotates every color's hue by `turns` (1.0 is a full circle).
@@ -100,6 +129,30 @@ pub fn rgb_to_hsv([r, g, b]: [f32; 3]) -> (f32, f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stops_round_trip_and_rotation_wraps() {
+        let stops = [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 1.0, 0.0],
+        ];
+        let p = Palette::from_stops(&stops);
+        for (got, want) in p.sample_stops(4).iter().zip(&stops) {
+            for k in 0..3 {
+                assert!((got[k] - want[k]).abs() < 0.02, "{got:?} vs {want:?}");
+            }
+        }
+        let mut q = p.clone();
+        q.rotate(0.25);
+        q.rotate(-0.25);
+        assert_eq!(p, q);
+        let mut r = p.clone();
+        r.reverse();
+        r.reverse();
+        assert_eq!(p, r);
+    }
 
     #[test]
     fn hsv_round_trip() {

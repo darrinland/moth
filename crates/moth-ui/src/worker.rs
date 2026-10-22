@@ -23,8 +23,34 @@ pub enum Work {
     },
     /// Re-render a flame that already exists (opened from a file).
     Thumb { genome: Genome },
-    /// A larger render of one flame for the preview panel.
-    Preview { genome: Genome, size: (u32, u32) },
+    /// A render of one flame for the preview area.
+    Preview { genome: Genome, spec: PreviewSpec },
+}
+
+/// How hard to render a preview: quick while the user is dragging, finer once they stop.
+#[derive(Clone, Copy)]
+pub struct PreviewSpec {
+    pub size: (u32, u32),
+    pub quality: f32,
+    pub oversample: u32,
+}
+
+impl PreviewSpec {
+    pub fn fast(width: u32, aspect: f32) -> Self {
+        Self {
+            size: (width, (width as f32 * aspect).round().max(1.0) as u32),
+            quality: 12.0,
+            oversample: 1,
+        }
+    }
+
+    pub fn fine(width: u32, aspect: f32) -> Self {
+        Self {
+            size: (width, (width as f32 * aspect).round().max(1.0) as u32),
+            quality: 90.0,
+            oversample: 2,
+        }
+    }
 }
 
 pub struct Job {
@@ -132,12 +158,12 @@ fn run(work: Work) -> (Genome, Image) {
             let img = gen_.render(&genome, &thumb_spec());
             (genome, img)
         }
-        Work::Preview { genome, size } => {
+        Work::Preview { genome, spec: p } => {
             let spec = RenderSpec {
-                width: size.0,
-                height: size.1,
-                quality: 150.0,
-                oversample: 2,
+                width: p.size.0,
+                height: p.size.1,
+                quality: p.quality,
+                oversample: p.oversample,
                 ..RenderSpec::default()
             };
             let img = gen_.render(&genome, &spec);

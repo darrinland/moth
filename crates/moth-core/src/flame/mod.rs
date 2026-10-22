@@ -10,7 +10,7 @@ pub mod variations;
 
 pub use genome::{Affine, Camera, Genome, Xform};
 pub use palette::Palette;
-pub use random::RandomSettings;
+pub use random::{RandomSettings, auto_frame};
 pub use variations::Variation;
 
 use crate::generator::{Generator, Image, RenderSpec};

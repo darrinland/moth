@@ -85,6 +85,19 @@ pub fn mutate(g: &Genome, s: &RandomSettings, amount: f32, seed: u64) -> Genome 
     fallback.unwrap_or_else(|| g.clone())
 }
 
+/// Re-frames a flame so the whole picture sits in the middle of the frame.
+/// Returns false (leaving the camera alone) if the flame diverges.
+pub fn auto_frame(g: &mut Genome, seed: u64) -> bool {
+    let mut rng = attempt_rng(seed, 0);
+    let before = g.camera.clone();
+    if fit_camera(g, &mut rng) {
+        true
+    } else {
+        g.camera = before;
+        false
+    }
+}
+
 fn attempt_rng(seed: u64, attempt: u64) -> ChaCha8Rng {
     ChaCha8Rng::seed_from_u64(seed.wrapping_add(attempt.wrapping_mul(0xD1B5_4A32_D192_ED03)))
 }
