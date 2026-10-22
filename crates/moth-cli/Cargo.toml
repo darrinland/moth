@@ -1,0 +1,13 @@
+[package]
+name = "moth-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive"] }
+moth-core = { version = "0.1.0", path = "../moth-core" }
+
+[[bin]]
+name = "moth"
+path = "src/main.rs"
