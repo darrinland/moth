@@ -1985,6 +1985,7 @@ name = "moth-core"
 version = "0.1.0"
 dependencies = [
  "jpeg-encoder",
+ "naga",
  "png",
  "rand",
  "rand_chacha",

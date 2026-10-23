@@ -1,0 +1,183 @@
+// The variation catalog: the single source for every variation.
+//
+// build.rs turns this file into the Rust `Variation` enum and its CPU `apply`, and into
+// the WGSL function the GPU renderer runs, so the CPU and GPU cannot drift apart.
+//
+// Syntax:
+//   variation <Name> "<flam3 name>" {
+//       let <name> = <expr>;      zero or more, in order
+//       out (<x'>, <y'>)          the new point
+//   }
+//
+// Inside an expression:
+//   x, y        the point after the transform's affine
+//   a b c d e f the transform's affine coefficients
+//   PI          3.14159...
+//   EPS         1e-10, a guard against division by zero
+//   sin cos tan sinh cosh exp sqrt floor abs
+//               the usual functions
+//   atan2(p, q) the same as Rust's p.atan2(q) and WGSL's atan2(p, q)
+//   lt0(v)      1.0 if v < 0, else 0.0
+//   coin()      0.0 or 1.0 with equal chance (a draw from the random source)
+//
+// Locals may not reuse the names above. Keep the bodies in the same form as flam3's, so
+// the paper-conformance test in flame/variations.rs keeps meaning what it says.
+
+variation Linear "linear" {
+    out (x, y)
+}
+
+variation Sinusoidal "sinusoidal" {
+    out (sin(x), sin(y))
+}
+
+variation Spherical "spherical" {
+    let r2 = x*x + y*y;
+    let k = 1.0 / (r2 + EPS);
+    out (x*k, y*k)
+}
+
+variation Swirl "swirl" {
+    let r2 = x*x + y*y;
+    let sn = sin(r2);
+    let cs = cos(r2);
+    out (sn*x - cs*y, cs*x + sn*y)
+}
+
+variation Horseshoe "horseshoe" {
+    let r = sqrt(x*x + y*y);
+    let k = 1.0 / (r + EPS);
+    out ((x - y)*(x + y)*k, 2.0*x*y*k)
+}
+
+variation Polar "polar" {
+    let r = sqrt(x*x + y*y);
+    let th = atan2(x, y);
+    out (th / PI, r - 1.0)
+}
+
+variation Handkerchief "handkerchief" {
+    let r = sqrt(x*x + y*y);
+    let th = atan2(x, y);
+    out (r*sin(th + r), r*cos(th - r))
+}
+
+variation Heart "heart" {
+    let r = sqrt(x*x + y*y);
+    let th = atan2(x, y);
+    let ang = th * r;
+    out (r*sin(ang), -r*cos(ang))
+}
+
+variation Disc "disc" {
+    let r = sqrt(x*x + y*y);
+    let th = atan2(x, y);
+    let ang = th / PI;
+    let pr = PI * r;
+    out (ang*sin(pr), ang*cos(pr))
+}
+
+variation Spiral "spiral" {
+    let r = sqrt(x*x + y*y);
+    let th = atan2(x, y);
+    let k = 1.0 / (r + EPS);
+    out (k*(cos(th) + sin(r)), k*(sin(th) - cos(r)))
+}
+
+// sin(theta) = x / r and cos(theta) = y / r, so no atan2 is needed.
+variation Hyperbolic "hyperbolic" {
+    let r = sqrt(x*x + y*y) + EPS;
+    out (x / (r*r), y)
+}
+
+variation Diamond "diamond" {
+    let r = sqrt(x*x + y*y);
+    let k = 1.0 / (r + EPS);
+    out ((x*k)*cos(r), (y*k)*sin(r))
+}
+
+variation Ex "ex" {
+    let r = sqrt(x*x + y*y);
+    let th = atan2(x, y);
+    let n0 = sin(th + r);
+    let n1 = cos(th - r);
+    let m0 = n0*n0*n0;
+    let m1 = n1*n1*n1;
+    out (r*(m0 + m1), r*(m0 - m1))
+}
+
+variation Julia "julia" {
+    let r = sqrt(x*x + y*y);
+    let th = atan2(x, y);
+    let ang = 0.5*th + coin()*PI;
+    let k = sqrt(r);
+    out (k*cos(ang), k*sin(ang))
+}
+
+// Multiplies x by 2 when it is negative, and y by 1/2 when it is negative.
+variation Bent "bent" {
+    out (x*(1.0 + lt0(x)), y*(1.0 - 0.5*lt0(y)))
+}
+
+variation Waves "waves" {
+    let dx = c*c + EPS;
+    let dy = f*f + EPS;
+    out (x + b*sin(y / dx), y + e*sin(x / dy))
+}
+
+variation Fisheye "fisheye" {
+    let r = sqrt(x*x + y*y);
+    let k = 2.0 / (r + 1.0);
+    out (k*y, k*x)
+}
+
+variation Popcorn "popcorn" {
+    out (x + c*sin(tan(3.0*y)), y + f*sin(tan(3.0*x)))
+}
+
+variation Exponential "exponential" {
+    let k = exp(x - 1.0);
+    out (k*cos(PI*y), k*sin(PI*y))
+}
+
+variation Cosine "cosine" {
+    out (cos(PI*x)*cosh(y), -sin(PI*x)*sinh(y))
+}
+
+variation Eyefish "eyefish" {
+    let r = sqrt(x*x + y*y);
+    let k = 2.0 / (r + 1.0);
+    out (k*x, k*y)
+}
+
+variation Bubble "bubble" {
+    let r2 = x*x + y*y;
+    let k = 4.0 / (r2 + 4.0);
+    out (k*x, k*y)
+}
+
+variation Cylinder "cylinder" {
+    out (sin(x), y)
+}
+
+variation Tangent "tangent" {
+    out (sin(x) / cos(y), tan(y))
+}
+
+variation Cross "cross" {
+    let s = x*x - y*y;
+    let k = sqrt(1.0 / (s*s + EPS));
+    out (k*x, k*y)
+}
+
+variation Rings "rings" {
+    let dx = c*c + EPS;
+    let r = sqrt(x*x + y*y);
+    let m = 2.0*dx;
+    let t = r + dx;
+    // The paper's direction is (cos theta, sin theta) with theta = atan(x/y),
+    // which is (y/r, x/r): note the swap in `out`.
+    let rr = t - m*floor(t / m) - dx + r*(1.0 - dx);
+    let k = rr / (r + EPS);
+    out (k*y, k*x)
+}
