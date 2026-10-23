@@ -1,0 +1,40 @@
+GPU: Apple M4 (Metal)
+
+Precision: WGSL (f32) against Rust (f64), 4000 random points each
+variation       max rel err  p99 rel err nonfinite
+linear              0.000e0      0.000e0         0
+sinusoidal         1.187e-7     8.968e-8         0
+spherical          1.388e-7     1.029e-7         0
+swirl              3.325e-7     1.929e-7         0
+horseshoe          1.980e-7     1.409e-7         0
+polar              1.481e-7     1.062e-7         0
+handkerchief       1.053e-6     3.811e-7         0
+heart              8.978e-7     4.955e-7         0
+disc               7.043e-7     4.169e-7         0
+spiral             1.382e-6     2.614e-7         0
+hyperbolic         2.721e-7     1.774e-7         0
+diamond            2.141e-7     1.388e-7         0
+ex                 1.022e-6     5.918e-7         0
+julia              4.806e-7     3.284e-7         0
+bent                0.000e0      0.000e0         0
+waves              5.397e-1     1.240e-4         0
+fisheye            1.539e-7     1.161e-7         0
+popcorn            1.265e-5     1.814e-6         0
+exponential        3.535e-7     2.497e-7         0
+cosine             5.015e-7     3.800e-7         0
+eyefish            1.553e-7     1.129e-7         0
+bubble             1.334e-7     9.190e-8         0
+cylinder           1.043e-7     8.324e-8         0
+tangent            2.892e-7     1.756e-7         0
+cross              1.354e-4     1.088e-6         0
+rings              3.096e-7     2.087e-7         0
+
+Accuracy: GPU histogram against CPU (total variation distance; lower is closer)
+noise floor = CPU against a second CPU run with another seed
+three variations   noise floor 0.0062   GPU vs CPU 0.0062   hits CPU 58689589 GPU 58719602   mean red CPU 146.4 GPU 146.4
+random             noise floor 0.0042   GPU vs CPU 0.0042   hits CPU 60000000 GPU 60030976   mean red CPU 61.8 GPU 61.8
+
+Throughput: chaos iterations per second (800x600, quality 200, 96M samples)
+three variations   CPU     58.5 M/s   GPU   2332.1 M/s   speed-up 39.8x
+random             CPU     71.4 M/s   GPU   2294.6 M/s   speed-up 32.1x
+one bright pixel   CPU    245.5 M/s   GPU    193.2 M/s   speed-up 0.8x

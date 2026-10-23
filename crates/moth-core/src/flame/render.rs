@@ -195,6 +195,14 @@ pub fn render(g: &Genome, spec: &RenderSpec) -> Image {
     render_rows(g, spec, 0, spec.height as usize)
 }
 
+/// Raw per-pixel `[count, r, g, b]` sums of the chaos game, before any filtering or tone
+/// mapping, at `spec`'s size with no oversampling. Other renderers (the GPU) are checked
+/// against this.
+pub fn raw_histogram(g: &Genome, spec: &RenderSpec) -> Vec<f32> {
+    let total = spec.quality.max(0.0) as f64 * (spec.width * spec.height) as f64;
+    accumulate(g, spec, total, 0, spec.height as usize)
+}
+
 /// Renders output rows `y0..y1` of the full frame. Strips of one frame match the
 /// full render, so huge images can be produced a band at a time.
 pub fn render_rows(g: &Genome, spec: &RenderSpec, y0: usize, y1: usize) -> Image {

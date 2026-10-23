@@ -1512,6 +1512,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpu-chaos"
+version = "0.0.0"
+dependencies = [
+ "bytemuck",
+ "moth-core",
+ "pollster 1.0.1",
+ "rand",
+ "rand_chacha",
+ "wgpu",
+]
+
+[[package]]
 name = "guillotiere"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,0 +1,15 @@
+[package]
+name = "gpu-chaos"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Throwaway GPU feasibility spike for the chaos game (plan step 0.6)"
+
+[dependencies]
+moth-core = { path = "../../crates/moth-core" }
+bytemuck = { version = "1.25.2", features = ["derive"] }
+pollster = "1.0.1"
+rand = "0.10.3"
+rand_chacha = "0.10.0"
+wgpu = "30"

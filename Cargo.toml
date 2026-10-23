@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/moth-core", "crates/moth-cli", "crates/moth-ui"]
+members = ["crates/moth-core", "crates/moth-cli", "crates/moth-ui", "spikes/gpu-chaos"]
 
 [workspace.package]
 version = "0.1.0"
