@@ -128,6 +128,14 @@ impl Library {
         Ok(self.len()? == 0)
     }
 
+    /// Runs SQLite's integrity check. True when the database is intact.
+    pub fn is_intact(&self) -> Result<bool> {
+        let verdict: String = self
+            .conn
+            .pragma_query_value(None, "integrity_check", |r| r.get(0))?;
+        Ok(verdict == "ok")
+    }
+
     /// Where the thumbnail for `id` lives. Thumbnails are PNG files next to the database.
     pub fn thumbnail_path(&self, id: i64) -> PathBuf {
         self.dir.join("thumbnails").join(format!("{id}.png"))
