@@ -38,7 +38,8 @@ rayon renderer on all cores, in a release build.
 |-------|-----|-----|----------|
 | three variations | 58.5 M/s | 2332 M/s | 39.8x |
 | random (seed 3) | 71.4 M/s | 2295 M/s | 32.1x |
-| one bright pixel (every point on one pixel) | 245.5 M/s | 193.2 M/s | 0.8x |
+| one bright pixel (every point on one pixel), before the hit cache | 245.5 M/s | 193.2 M/s | 0.8x |
+| one bright pixel, with the hit cache | 243 M/s | 7,850 M/s | 32x |
 
 The CPU figure here is higher than the "about 36M samples/s" recorded in the plan. Both are
 measurements on this machine, but the plan's figure came from an earlier run and its conditions
@@ -64,11 +65,15 @@ The full table is in the raw output. The clamp was measured on 2026-10-22 after 
 ## Findings
 
 1. **Speed.** On normal flames the GPU runs 32 to 40 times faster than the CPU.
-2. **Contention is the problem.** When every hit lands on one pixel, the GPU drops to 193 M/s,
-   below the CPU's 246 M/s. The CPU copes through its per-thread hit cache, which merges
-   repeated hits to a pixel before touching shared memory. The GPU has no such cache, so every
-   hit is an atomic on one address. This is the worst case. Dense areas of real flames are much
-   less concentrated, so the real penalty is smaller, but it has not been measured yet.
+2. **Contention was the problem, and a per-thread hit cache fixes the worst case.** Before the
+   cache, when every hit landed on one pixel, the GPU dropped to 193 M/s, below the CPU's
+   246 M/s. Each thread now keeps its last pixel and its pending count and colour in registers,
+   and flushes to the shared atomics only when the walk moves to another pixel. With the cache
+   the same case runs at about 7,850 M/s, roughly 32 times the CPU. Normal flames are unchanged
+   (about 2,300 to 2,500 M/s). The histograms are identical to the uncached run: the hit counts
+   and mean colours match exactly, since integer sums commute. Measured on the quiet machine,
+   three runs each, with the cache and without. The best case for the cache is one pixel;
+   flames where hits spread over a few pixels fall between the two and are not measured yet.
 3. **Precision is fine for most variations, with two exceptions.** Waves divides by
    `c*c + 1e-10`, so a transform with `c` near zero sends `sin` a large argument, which f32
    cannot reduce accurately. Cross has a similar near-zero division. Both denominators are now
@@ -80,12 +85,13 @@ The full table is in the raw output. The clamp was measured on 2026-10-22 after 
 
 ## Decision
 
-**Go for the GPU renderer** (steps 3.4 to 3.6), with two conditions:
+**Go for the GPU renderer** (steps 3.4 to 3.6). Both conditions below are now met
+for the cases measured:
 
-- **Contention.** Before 3.4 is accepted, the hot-pixel case needs a fix. Options to test next:
-  a per-thread register cache like the CPU's `HitCache`, or merging hits within a workgroup
-  before the global atomics. The integer atomics stay: they are exact and do not depend on
-  order. Acceptance: the one-bright-pixel case must not be slower than the CPU.
+- **Contention.** Met (2026-10-22). The per-thread hit cache makes the one-bright-pixel case
+  about 32 times faster than the CPU, against the criterion of not slower. The integer atomics
+  stay: they are exact and do not depend on order. Still open for step 3.4: measure flames
+  whose hits spread over a few pixels, where the cache is least effective.
 - **Singular variations.** Decided 2026-10-22: Waves and Cross denominators are clamped at 1e-6
   in the shared definition, so both renderers agree. This changes output for flames with a
   near-zero `c` or `x*x - y*y`. Waves' p99 error is still 1e-4; accepted for now.

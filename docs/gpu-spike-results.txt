@@ -35,6 +35,6 @@ three variations   noise floor 0.0062   GPU vs CPU 0.0062   hits CPU 58689589 GP
 random             noise floor 0.0042   GPU vs CPU 0.0042   hits CPU 60000000 GPU 60030976   mean red CPU 61.8 GPU 61.8
 
 Throughput: chaos iterations per second (800x600, quality 200, 96M samples)
-three variations   CPU     23.8 M/s   GPU   2197.7 M/s   speed-up 92.4x
-random             CPU     33.4 M/s   GPU   2042.2 M/s   speed-up 61.2x
-one bright pixel   CPU    116.0 M/s   GPU    185.8 M/s   speed-up 1.6x
+three variations   CPU     60.4 M/s   GPU   2474.6 M/s   speed-up 40.9x
+random             CPU     72.9 M/s   GPU   2411.8 M/s   speed-up 33.1x
+one bright pixel   CPU    243.0 M/s   GPU   7891.4 M/s   speed-up 32.5x

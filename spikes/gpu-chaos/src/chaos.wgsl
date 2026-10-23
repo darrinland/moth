@@ -91,6 +91,19 @@ fn apply_xf(i: u32, x: f32, y: f32, state: ptr<function, u32>) -> vec2<f32> {
     return vec2<f32>(ox, oy);
 }
 
+const NO_PIXEL: u32 = 0xffffffffu;
+
+// Adds a pending run of hits to the shared histogram.
+fn commit(pix: u32, n: u32, rgb: vec3<u32>) {
+    if (pix == NO_PIXEL) {
+        return;
+    }
+    atomicAdd(&hist[pix], n);
+    atomicAdd(&hist[pix + 1u], rgb.x);
+    atomicAdd(&hist[pix + 2u], rgb.y);
+    atomicAdd(&hist[pix + 3u], rgb.z);
+}
+
 @compute @workgroup_size(256)
 fn chaos(@builtin(global_invocation_id) gid: vec3<u32>) {
     var st = (gid.x * 0x9E3779B9u) ^ (p.seed * 0x85EBCA6Bu) ^ 0x2545F491u;
@@ -98,6 +111,9 @@ fn chaos(@builtin(global_invocation_id) gid: vec3<u32>) {
     var x = unit(&st) * 2.0 - 1.0;
     var y = unit(&st) * 2.0 - 1.0;
     var c = unit(&st);
+    var cache_pix = NO_PIXEL;
+    var cache_n = 0u;
+    var cache_rgb = vec3<u32>(0u);
     let total = p.iters + p.burn_in;
     for (var it = 0u; it < total; it = it + 1u) {
         let pick = unit(&st) * p.total_weight;
@@ -142,13 +158,21 @@ fn chaos(@builtin(global_invocation_id) gid: vec3<u32>) {
         let sy = (dx * p.sin_r + dy * p.cos_r) * p.ppu + p.half_h;
         if (sx >= 0.0 && sy >= 0.0 && sx < f32(p.w) && sy < f32(p.h)) {
             let pix = (u32(sy) * p.w + u32(sx)) * 4u;
-            let rgb = palette[u32(clamp(fc, 0.0, 1.0) * 255.0)];
-            atomicAdd(&hist[pix], 1u);
-            atomicAdd(&hist[pix + 1u], rgb.x);
-            atomicAdd(&hist[pix + 2u], rgb.y);
-            atomicAdd(&hist[pix + 3u], rgb.z);
+            let rgb = palette[u32(clamp(fc, 0.0, 1.0) * 255.0)].xyz;
+            // Hits to the same pixel are merged in registers; the shared atomics only see a
+            // pixel when the walk moves on. Integer sums commute, so the result is unchanged.
+            if (pix == cache_pix) {
+                cache_n = cache_n + 1u;
+                cache_rgb = cache_rgb + rgb;
+            } else {
+                commit(cache_pix, cache_n, cache_rgb);
+                cache_pix = pix;
+                cache_n = 1u;
+                cache_rgb = rgb;
+            }
         }
     }
+    commit(cache_pix, cache_n, cache_rgb);
 }
 
 // Per-variation check: evaluates `variation_apply` at many probe points so the WGSL can be
