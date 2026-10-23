@@ -1,11 +1,13 @@
 //! The app shell: a header with the three stages, the active stage in the middle and a
 //! footer with that stage's primary action. State shared between stages lives here.
 
+use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 
 use eframe::egui::{self, Color32, Key, RichText, TextureHandle, TextureOptions};
 use moth_core::export::{ExportOptions, load_flames};
 use moth_core::flame::{Genome, RandomSettings, Variation, io};
+use moth_core::library::{Library, now};
 use moth_core::output::BitDepth;
 use moth_core::{Image, RenderSpec};
 
@@ -105,6 +107,17 @@ impl Preview {
     }
 }
 
+/// Opens the library. `MOTH_DATA` overrides the folder. A self-test (`MOTH_SMOKE`) without
+/// it keeps its library in its own folder, so it never writes to the user's library.
+fn open_library() -> Result<Library, String> {
+    let dir = std::env::var_os("MOTH_DATA")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("MOTH_SMOKE").map(|dir| PathBuf::from(dir).join("library")))
+        .or_else(moth_core::paths::data_dir)
+        .ok_or_else(|| "no data folder".to_string())?;
+    Library::open(&dir).map_err(|e| e.to_string())
+}
+
 pub struct MothApp {
     pub worker: Worker,
     pub exporter: Exporter,
@@ -118,6 +131,10 @@ pub struct MothApp {
     pub render: RenderStage,
     pub preview: Preview,
     pub status: String,
+    /// Every flame selected or edited is stored here. `None` if the library could not open.
+    pub library: Option<Library>,
+    /// The library id of the flame being refined; the parent of its next edit.
+    pub refine_source: Option<i64>,
     smoke: Option<crate::smoke::Smoke>,
 }
 
@@ -128,6 +145,10 @@ impl MothApp {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs() % 1_000_000)
             .unwrap_or(1);
+        let (library, library_note) = match open_library() {
+            Ok(library) => (Some(library), String::new()),
+            Err(e) => (None, format!("Library unavailable: {e}")),
+        };
         let mut app = Self {
             worker: Worker::spawn(cc.egui_ctx.clone()),
             exporter: Exporter::spawn(cc.egui_ctx.clone()),
@@ -140,11 +161,44 @@ impl MothApp {
             refine: RefineState::new(),
             render: RenderStage::new(),
             preview: Preview::default(),
-            status: String::new(),
+            status: library_note,
+            library,
+            refine_source: None,
             smoke: crate::smoke::Smoke::from_env(),
         };
         app.generate();
         app
+    }
+
+    /// Selects a gallery card and stores its flame in the library.
+    pub fn select(&mut self, index: usize) {
+        self.selected = index;
+        if let Some(genome) = self.cards.get(index).and_then(|c| c.genome.clone()) {
+            self.remember(&genome, None);
+        }
+    }
+
+    /// Stores `genome` in the library (a repeat only bumps its last-selected time) and returns
+    /// its id. A failure is reported in the status line and does not stop the app.
+    fn remember(&mut self, genome: &Genome, parent: Option<i64>) -> Option<i64> {
+        let library = self.library.as_mut()?;
+        let xml = moth_core::flame::io::to_xml(genome);
+        match library.record(&xml, &genome.name, parent, now()) {
+            Ok(id) => Some(id),
+            Err(e) => {
+                self.status = format!("Could not save to the library: {e}");
+                None
+            }
+        }
+    }
+
+    /// Stores the edits committed in Refine, each as a child of the version before it.
+    fn record_refine_edits(&mut self) {
+        for genome in std::mem::take(&mut self.refine.edits) {
+            if let Some(id) = self.remember(&genome, self.refine_source) {
+                self.refine_source = Some(id);
+            }
+        }
     }
 
     fn take_seed(&mut self) -> u64 {
@@ -185,6 +239,7 @@ impl MothApp {
                     .genome
                     .clone()
                     .expect("selection checked");
+                self.refine_source = self.remember(&genome, None);
                 let seed = self.take_seed();
                 self.refine.begin(genome, seed);
                 self.preview.texture = None;
@@ -427,7 +482,10 @@ impl eframe::App for MothApp {
         self.footer(ui);
         match self.stage {
             Stage::Explore => explore::ui(self, ui),
-            Stage::Refine => refine::ui(self, ui),
+            Stage::Refine => {
+                refine::ui(self, ui);
+                self.record_refine_edits();
+            }
             Stage::Render => render_stage::ui(self, ui),
         }
 

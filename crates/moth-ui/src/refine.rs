@@ -34,6 +34,8 @@ pub struct RefineState {
     fine_sent: bool,
     gradient: GradientState,
     palette_seed: u64,
+    /// Versions committed by edits since the flame was opened, for the library to record.
+    pub edits: Vec<Genome>,
 }
 
 impl RefineState {
@@ -50,6 +52,7 @@ impl RefineState {
             fine_sent: true,
             gradient: GradientState::default(),
             palette_seed: 0,
+            edits: Vec::new(),
         }
     }
 
@@ -58,6 +61,7 @@ impl RefineState {
         self.committed = genome;
         self.undo.clear();
         self.redo.clear();
+        self.edits.clear();
         self.sent = None;
         self.palette_seed = seed;
     }
@@ -91,6 +95,7 @@ impl RefineState {
         if !pointer_down && self.working != self.committed {
             self.undo
                 .push(std::mem::replace(&mut self.committed, self.working.clone()));
+            self.edits.push(self.committed.clone());
             if self.undo.len() > HISTORY_LIMIT {
                 self.undo.remove(0);
             }

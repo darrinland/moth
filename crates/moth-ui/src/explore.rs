@@ -80,10 +80,10 @@ fn gallery(app: &mut MothApp, ui: &mut egui::Ui) {
         }
     });
     if let Some(i) = clicked {
-        app.selected = i;
+        app.select(i);
     }
     if let Some(i) = opened {
-        app.selected = i;
+        app.select(i);
         app.go(Stage::Refine);
     }
 }

@@ -19,6 +19,10 @@ pub struct Smoke {
     step_started: Instant,
     shot_done: Option<Arc<AtomicBool>>,
     original: Option<moth_core::flame::Genome>,
+    /// Library rows before the self-test selected anything, and the library id of the flame it
+    /// refines. The library may already hold rows from an earlier run in the same folder.
+    base_rows: i64,
+    source: Option<i64>,
     failures: usize,
 }
 
@@ -32,6 +36,8 @@ impl Smoke {
             step_started: Instant::now(),
             shot_done: None,
             original: None,
+            base_rows: 0,
+            source: None,
             failures: 0,
         })
     }
@@ -96,8 +102,20 @@ impl Smoke {
                 self.shoot(ctx, "1-explore");
             }
             1 => {
+                let rows =
+                    |app: &MothApp| app.library.as_ref().map_or(-1, |l| l.len().unwrap_or(-1));
+                self.base_rows = rows(app);
+                for i in 0..5 {
+                    app.select(i);
+                }
+                app.select(0); // a repeat must not add a row
+                self.check(
+                    rows(app) == self.base_rows + 5,
+                    "library: five selections make five rows, a repeat none",
+                );
                 app.selected = 2;
                 app.go(Stage::Refine);
+                self.source = app.refine_source;
                 self.original = Some(app.refine.working.clone());
                 self.next();
             }
@@ -130,6 +148,21 @@ impl Smoke {
                 self.check(
                     changed && app.refine.can_undo(),
                     "refine: edits create an undo step",
+                );
+                let rows = app.library.as_ref().map_or(-1, |l| l.len().unwrap_or(-1));
+                self.check(
+                    rows == self.base_rows + 6,
+                    "library: one committed edit adds one row",
+                );
+                let parent = app
+                    .library
+                    .as_ref()
+                    .zip(app.refine_source)
+                    .and_then(|(l, id)| l.get(id).ok().flatten())
+                    .map(|stored| stored.parent);
+                self.check(
+                    parent == Some(self.source),
+                    "library: the edit records the flame it came from as its parent",
                 );
                 self.shoot(ctx, "5-refine-edited");
             }
@@ -165,6 +198,11 @@ impl Smoke {
                 self.check(
                     Some(&app.refine.working) != self.original.as_ref(),
                     "refine: redo reapplies the edit",
+                );
+                let rows = app.library.as_ref().map_or(-1, |l| l.len().unwrap_or(-1));
+                self.check(
+                    rows == self.base_rows + 6,
+                    "library: undo and redo add no rows",
                 );
                 self.next();
             }
