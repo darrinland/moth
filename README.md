@@ -5,7 +5,7 @@ random fractal flames, refine the one you like, and render it at any size. Writt
 
 > **Status: early.** The flame explorer works end to end (app, command line, file formats), but
 > there is no release yet. See [docs/PLAN.md](docs/PLAN.md) for the road to feature complete.
-> Targets are macOS, Windows and Linux; so far it is developed and tested on macOS.
+> Targets are macOS (Apple Silicon) and Windows (x64); so far it is developed and tested on macOS.
 
 ![Explore: a gallery of random flames](docs/images/explore.png)
 
@@ -83,7 +83,7 @@ is selected. The big button at the bottom right is always the next step.
 The preview updates as you edit: a quick version while you drag, a finer one when you stop.
 
 - **Drag** the preview to move the picture; **scroll** to zoom.
-- **Undo / Redo** in the footer, or `⌘Z` and `⇧⌘Z` (`Ctrl` on Windows and Linux).
+- **Undo / Redo** in the footer, or `⌘Z` and `⇧⌘Z` (`Ctrl` on Windows).
 - Three tabs on the right:
 
 | Tab | What it does |
