@@ -83,7 +83,7 @@ is selected. The big button at the bottom right is always the next step.
 The preview updates as you edit: a quick version while you drag, a finer one when you stop.
 
 - **Drag** the preview to move the picture; **scroll** to zoom.
-- **Undo / Redo** in the footer, or `⌘Z` and `⇧⌘Z` (`Ctrl` on Windows).
+- **Undo / Redo** in the footer, or `Cmd+Z` and `Cmd+Shift+Z` on macOS (`Ctrl` on Windows).
 - Three tabs on the right:
 
 | Tab | What it does |
@@ -119,7 +119,7 @@ When you leave Refine, your edits are written back to the flame in the gallery.
 | Explore | Double-click a flame | Open it in Refine |
 | Refine | Drag the preview | Move the picture |
 | Refine | Scroll over the preview | Zoom |
-| Refine | `⌘Z` / `⇧⌘Z` | Undo / redo |
+| Refine | `Cmd+Z` / `Cmd+Shift+Z` (`Ctrl` on Windows) | Undo / redo |
 
 ### The File menu
 

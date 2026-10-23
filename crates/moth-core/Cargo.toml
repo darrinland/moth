@@ -5,6 +5,7 @@ edition = "2024"
 license.workspace = true
 
 [dependencies]
+directories = "6"
 jpeg-encoder = "0.7.1"
 png = "0.18.1"
 rand = "0.10.3"

@@ -16,6 +16,16 @@ use crate::render_stage::{Format, RenderStage};
 use crate::worker::{Done, Job, PreviewSpec, Work, Worker};
 use crate::{explore, refine, render_stage};
 
+// Shortcut hints, named for the platform's command key. Plain text, so every font has them.
+#[cfg(target_os = "macos")]
+const UNDO_HINT: &str = "Cmd+Z";
+#[cfg(target_os = "macos")]
+const REDO_HINT: &str = "Cmd+Shift+Z";
+#[cfg(not(target_os = "macos"))]
+const UNDO_HINT: &str = "Ctrl+Z";
+#[cfg(not(target_os = "macos"))]
+const REDO_HINT: &str = "Ctrl+Shift+Z";
+
 const GALLERY_SIZE: usize = 10;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -519,7 +529,7 @@ impl MothApp {
                                 self.refine.can_undo(),
                                 egui::Button::new(format!("{} Undo", icons::ARROW_U_UP_LEFT)),
                             )
-                            .on_hover_text("⌘Z")
+                            .on_hover_text(UNDO_HINT)
                             .clicked()
                         {
                             self.refine.undo();
@@ -529,7 +539,7 @@ impl MothApp {
                                 self.refine.can_redo(),
                                 egui::Button::new(format!("{} Redo", icons::ARROW_U_UP_RIGHT)),
                             )
-                            .on_hover_text("⇧⌘Z")
+                            .on_hover_text(REDO_HINT)
                             .clicked()
                         {
                             self.refine.redo();

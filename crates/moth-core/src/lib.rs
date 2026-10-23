@@ -8,5 +8,6 @@ pub mod export;
 pub mod flame;
 pub mod generator;
 pub mod output;
+pub mod paths;
 
 pub use generator::{Generator, Image, RenderSpec};

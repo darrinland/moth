@@ -274,11 +274,14 @@ fn reveal(path: &std::path::Path) {
         .arg("-R")
         .arg(path)
         .spawn();
+    // Explorer wants `/select,<path>` as one argument, so it is passed unquoted by Rust.
     #[cfg(target_os = "windows")]
-    let _ = std::process::Command::new("explorer")
-        .arg("/select,")
-        .arg(path)
-        .spawn();
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("explorer")
+            .raw_arg(format!("/select,\"{}\"", path.display()))
+            .spawn();
+    }
     #[cfg(all(unix, not(target_os = "macos")))]
     if let Some(dir) = path.parent() {
         let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
