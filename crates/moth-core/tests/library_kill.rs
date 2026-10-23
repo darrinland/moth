@@ -30,7 +30,8 @@ fn writer_child() {
         return;
     };
     let mut lib = Library::open(std::path::Path::new(&dir)).expect("open");
-    for n in 0.. {
+    // Runs until the parent kills it.
+    for n in 0..=usize::MAX {
         lib.record(&flame_xml(n), &format!("n{n}"), None, now())
             .expect("record");
         println!("committed {n}");
