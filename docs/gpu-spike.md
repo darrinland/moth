@@ -44,6 +44,11 @@ The CPU figure here is higher than the "about 36M samples/s" recorded in the pla
 measurements on this machine, but the plan's figure came from an earlier run and its conditions
 were not recorded. Step 3.3 will set a proper benchmark.
 
+Re-run after the clamp, with other processes using most of the CPU (`dotnet`, about 780%):
+CPU 24.0 / 27.2 / 97.2 M/s and GPU 2119 / 2259 / 194 M/s for the three flames in the same order.
+The GPU figures agree with the table above. The CPU figures do not, because of that load, so they
+should not be compared with the table. Re-measure the CPU on a quiet machine in step 3.3.
+
 ### Precision (WGSL f32 against Rust f64)
 
 4000 random points per variation, with random affine coefficients. Relative error is the largest
@@ -51,10 +56,10 @@ component difference divided by max(1, |value|).
 
 - 23 of 26 variations: max relative error below 3e-6.
 - Popcorn: max 1.3e-5, p99 1.8e-6.
-- Cross: max 1.4e-4, p99 1.1e-6.
-- Waves: max 0.54, p99 1.2e-4.
+- Cross: max 1.3e-5, p99 1.0e-6 (after the clamp; was max 1.4e-4).
+- Waves: max 0.019, p99 1.1e-4 (after the clamp; was max 0.54).
 
-The full table is in the raw output.
+The full table is in the raw output. The clamp was measured on 2026-10-22 after the decision below.
 
 ## Findings
 
@@ -65,9 +70,11 @@ The full table is in the raw output.
    hit is an atomic on one address. This is the worst case. Dense areas of real flames are much
    less concentrated, so the real penalty is smaller, but it has not been measured yet.
 3. **Precision is fine for most variations, with two exceptions.** Waves divides by
-   `c*c + 1e-10`, so a transform with `c` near zero sends `sin` an argument around 1e10, which
-   f32 cannot reduce accurately. Cross has a similar near-zero division. Popcorn's error is
-   small. These are rare, but they are real, and they need a rule that both renderers share.
+   `c*c + 1e-10`, so a transform with `c` near zero sends `sin` a large argument, which f32
+   cannot reduce accurately. Cross has a similar near-zero division. Both denominators are now
+   floored at 1e-6 in the shared definition. That cut the worst error by about 30x for Waves
+   and 10x for Cross. Waves still has a p99 of 1e-4, because `sin` of an argument near 1e6 is
+   inaccurate in f32 too. Popcorn's error is small.
 4. **Accuracy holds in aggregate.** At image level the GPU matches the CPU to within run-to-run
    noise, despite the per-point errors above.
 
@@ -79,10 +86,9 @@ The full table is in the raw output.
   a per-thread register cache like the CPU's `HitCache`, or merging hits within a workgroup
   before the global atomics. The integer atomics stay: they are exact and do not depend on
   order. Acceptance: the one-bright-pixel case must not be slower than the CPU.
-- **Singular variations.** Waves and Cross need a decision about how the near-zero division is
-  handled in both renderers. This is an owner decision because it changes output for those
-  rare cases: clamp the denominator (for example at 1e-6) in the shared definition, or accept
-  the error.
+- **Singular variations.** Decided 2026-10-22: Waves and Cross denominators are clamped at 1e-6
+  in the shared definition, so both renderers agree. This changes output for flames with a
+  near-zero `c` or `x*x - y*y`. Waves' p99 error is still 1e-4; accepted for now.
 
 ## Not covered
 

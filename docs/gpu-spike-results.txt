@@ -17,7 +17,7 @@ diamond            2.141e-7     1.388e-7         0
 ex                 1.022e-6     5.918e-7         0
 julia              4.806e-7     3.284e-7         0
 bent                0.000e0      0.000e0         0
-waves              5.397e-1     1.240e-4         0
+waves              1.854e-2     1.120e-4         0
 fisheye            1.539e-7     1.161e-7         0
 popcorn            1.265e-5     1.814e-6         0
 exponential        3.535e-7     2.497e-7         0
@@ -26,7 +26,7 @@ eyefish            1.553e-7     1.129e-7         0
 bubble             1.334e-7     9.190e-8         0
 cylinder           1.043e-7     8.324e-8         0
 tangent            2.892e-7     1.756e-7         0
-cross              1.354e-4     1.088e-6         0
+cross              1.332e-5     9.936e-7         0
 rings              3.096e-7     2.087e-7         0
 
 Accuracy: GPU histogram against CPU (total variation distance; lower is closer)
@@ -35,6 +35,6 @@ three variations   noise floor 0.0062   GPU vs CPU 0.0062   hits CPU 58689589 GP
 random             noise floor 0.0042   GPU vs CPU 0.0042   hits CPU 60000000 GPU 60030976   mean red CPU 61.8 GPU 61.8
 
 Throughput: chaos iterations per second (800x600, quality 200, 96M samples)
-three variations   CPU     58.5 M/s   GPU   2332.1 M/s   speed-up 39.8x
-random             CPU     71.4 M/s   GPU   2294.6 M/s   speed-up 32.1x
-one bright pixel   CPU    245.5 M/s   GPU    193.2 M/s   speed-up 0.8x
+three variations   CPU     23.8 M/s   GPU   2197.7 M/s   speed-up 92.4x
+random             CPU     33.4 M/s   GPU   2042.2 M/s   speed-up 61.2x
+one bright pixel   CPU    116.0 M/s   GPU    185.8 M/s   speed-up 1.6x

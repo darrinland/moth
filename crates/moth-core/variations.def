@@ -17,6 +17,7 @@
 //   sin cos tan sinh cosh exp sqrt floor abs
 //               the usual functions
 //   atan2(p, q) the same as Rust's p.atan2(q) and WGSL's atan2(p, q)
+//   max(p, q)   the larger of p and q
 //   lt0(v)      1.0 if v < 0, else 0.0
 //   coin()      0.0 or 1.0 with equal chance (a draw from the random source)
 //
@@ -120,8 +121,9 @@ variation Bent "bent" {
 }
 
 variation Waves "waves" {
-    let dx = c*c + EPS;
-    let dy = f*f + EPS;
+    // Denominators are floored at 1e-6: c near zero would otherwise send sin an argument near 1e10.
+    let dx = max(c*c + EPS, 1e-6);
+    let dy = max(f*f + EPS, 1e-6);
     out (x + b*sin(y / dx), y + e*sin(x / dy))
 }
 
@@ -166,7 +168,7 @@ variation Tangent "tangent" {
 
 variation Cross "cross" {
     let s = x*x - y*y;
-    let k = sqrt(1.0 / (s*s + EPS));
+    let k = sqrt(1.0 / max(s*s + EPS, 1e-6));
     out (k*x, k*y)
 }
 

@@ -14,7 +14,7 @@ const RESERVED: &[&str] = &["x", "y", "a", "b", "c", "d", "e", "f", "PI", "EPS"]
 const FUNCTIONS_1: &[&str] = &[
     "sin", "cos", "tan", "sinh", "cosh", "exp", "sqrt", "floor", "abs", "lt0",
 ];
-const FUNCTIONS_2: &[&str] = &["atan2"];
+const FUNCTIONS_2: &[&str] = &["atan2", "max"];
 const FUNCTIONS_0: &[&str] = &["coin"];
 
 #[derive(Clone, Debug)]
@@ -332,6 +332,7 @@ fn rust_expr(expr: &Expr) -> String {
                 rust_operand(&args[0]),
                 rust_operand(&args[1])
             ),
+            "max" => format!("{}.max({})", rust_operand(&args[0]), rust_operand(&args[1])),
             "lt0" => format!(
                 "(if {} < 0.0 {{ 1.0 }} else {{ 0.0 }})",
                 rust_operand(&args[0])
