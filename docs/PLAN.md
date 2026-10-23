@@ -83,7 +83,7 @@ Known issues carried into the plan:
 | # | Step | Size | Done when |
 |---|------|------|-----------|
 | 0.1 | ~~Choose the license.~~ **Decided: MIT** (2026-10-22); `LICENSE` added and every crate declares it. Still to do: verify the licenses of flam3 and Apophysis 7X so the clean-room rule rests on fact. | S | `LICENSE` committed (done); a note in `docs/` records what was checked about flam3 and Apophysis. |
-| 0.2 | CI on GitHub Actions: `fmt --check`, `clippy -D warnings`, `test` on **macOS and Windows**. Fix the existing clippy warnings first. Where a runner has no GPU, GPU tests use a software adapter (WARP on Windows); checks that need real hardware are run locally and listed in the release checklist. | M | Green CI on both platforms for `main`. |
+| 0.2 | ~~CI on GitHub Actions.~~ **Moved to the backlog** (2026-10-22). Until it returns, tests run locally before every commit (see `CLAUDE.md`). | M | See the backlog. |
 | 0.3 | Move the self-test into CI as a headless job where a display is available (or keep it local and document it). | S | `MOTH_SMOKE` result is part of the release checklist. |
 | 0.4 | ~~`README.md`: what Moth is, how to build and run, the CLI, the file format.~~ **Done**: the README covers building, the app, the CLI, formats and rendering. Keep it current as each feature lands. | S | A new contributor can build and render a flame from the README alone (checked). |
 | 0.5 | Replace emoji in the UI with an icon font or drawn icons, so no glyph can go missing. | S | No empty boxes anywhere; checked by screenshot in the self-test. |
@@ -189,7 +189,7 @@ this document.
 - **Self-test** (`MOTH_SMOKE=<dir>`) that drives every stage and checks behaviors such as undo
   restoring exactly. It captures only the app's own window. Extend it with each new feature,
   and with a restart check for history (step 1.3).
-- **Cross-platform CI** from Milestone 0.
+- **Local test run before every commit** until CI is back (see the backlog and `CLAUDE.md`).
 
 ## Feature-complete checklist
 
@@ -206,7 +206,7 @@ Run through this before calling it done.
 - [ ] GPU previews and renders, CPU fallback, results agree.
 - [ ] At least one non-flame generator, and user-defined variations.
 - [ ] Both themes, HiDPI, keyboard use.
-- [ ] CI green on macOS and Windows; self-test passes.
+- [ ] Tests pass on macOS and Windows; self-test passes. (CI is in the backlog.)
 
 ## Decisions
 
@@ -231,3 +231,11 @@ Open: none for now.
 - Linux builds (AppImage or similar), including the CI runner and the `Ctrl`/file-manager
   behavior on Linux.
 - Intel Mac builds.
+
+## Backlog (not scheduled)
+
+- **CI on GitHub Actions** (was step 0.2): `fmt --check`, `clippy -D warnings`, `test` on macOS
+  and Windows. Fix the existing clippy warnings first. Where a runner has no GPU, GPU tests use a
+  software adapter (WARP on Windows); checks that need real hardware are run locally and listed in
+  the release checklist. Done when CI is green on both platforms for `main`.
+- **Self-test in CI** (was step 0.3): depends on the CI item above.
