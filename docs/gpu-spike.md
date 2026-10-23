@@ -40,6 +40,12 @@ rayon renderer on all cores, in a release build.
 | random (seed 3) | 71.4 M/s | 2295 M/s | 32.1x |
 | one bright pixel (every point on one pixel), before the hit cache | 245.5 M/s | 193.2 M/s | 0.8x |
 | one bright pixel, with the hit cache | 243 M/s | 7,850 M/s | 32x |
+| 4 points, with the hit cache | 138 M/s | 1,000 M/s | 7.3x |
+| 16 points, with the hit cache | 117 M/s | 1,975 M/s | 17x |
+| 64 points, with the hit cache | 108 M/s | 996 M/s | 9.2x |
+
+The point flames send every point to one of k fixed pixels, chosen by weight. Figures are the
+median of three runs; the spread from run to run was under 2%.
 
 The CPU figure here is higher than the "about 36M samples/s" recorded in the plan. Both are
 measurements on this machine, but the plan's figure came from an earlier run and its conditions
@@ -72,8 +78,12 @@ The full table is in the raw output. The clamp was measured on 2026-10-22 after 
    the same case runs at about 7,850 M/s, roughly 32 times the CPU. Normal flames are unchanged
    (about 2,300 to 2,500 M/s). The histograms are identical to the uncached run: the hit counts
    and mean colours match exactly, since integer sums commute. Measured on the quiet machine,
-   three runs each, with the cache and without. The best case for the cache is one pixel;
-   flames where hits spread over a few pixels fall between the two and are not measured yet.
+   three runs each, with the cache and without.
+   Flames whose hits spread over a few pixels are the weakest case. With 4 to 64 pixels the GPU
+   runs at about 1,000 to 2,000 M/s, still 7 to 17 times the CPU. The cache cannot absorb these
+   hits, so the shared atomics contend on a few addresses. The 64-point case is also slower
+   because the transform pick is a linear search over all transforms. Both are candidates for
+   step 3.4.
 3. **Precision is fine for most variations, with two exceptions.** Waves divides by
    `c*c + 1e-10`, so a transform with `c` near zero sends `sin` a large argument, which f32
    cannot reduce accurately. Cross has a similar near-zero division. Both denominators are now

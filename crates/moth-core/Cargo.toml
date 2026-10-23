@@ -12,7 +12,10 @@ rand = "0.10.3"
 rand_chacha = "0.10.0"
 rayon = "1.12.0"
 roxmltree = "0.21.1"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+sha2 = "0.11.1"
 thiserror = "2.0.21"
 
 [dev-dependencies]
 naga = { version = "30", features = ["wgsl-in"] }
+tempfile = "3.27.0"

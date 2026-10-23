@@ -7,6 +7,7 @@
 pub mod export;
 pub mod flame;
 pub mod generator;
+pub mod library;
 pub mod output;
 pub mod paths;
 

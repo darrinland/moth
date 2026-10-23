@@ -463,6 +463,35 @@ fn point_flame() -> Genome {
     g
 }
 
+/// Every point lands on one of `k` fixed pixels, chosen at random by weight, so hits
+/// spread over k pixels. Between the one-pixel case and a normal flame.
+fn spread_flame(k: usize) -> Genome {
+    let mut g = simple_flame();
+    g.name = format!("{k} points");
+    let side = (k as f64).sqrt().ceil() as usize;
+    g.xforms = (0..k)
+        .map(|i| {
+            let (col, row) = (i % side, i / side);
+            Xform {
+                weight: 1.0,
+                color: i as f64 / k.max(2) as f64,
+                color_speed: 0.5,
+                affine: Affine {
+                    a: 0.0,
+                    b: 0.0,
+                    c: col as f64 * 0.5 - side as f64 * 0.25,
+                    d: 0.0,
+                    e: 0.0,
+                    f: row as f64 * 0.5 - side as f64 * 0.25,
+                },
+                post: Affine::IDENTITY,
+                variations: vec![(Variation::Linear, 1.0)],
+            }
+        })
+        .collect();
+    g
+}
+
 fn random_flame() -> Genome {
     let mut g = random::randomize(&RandomSettings::default(), 3);
     random::auto_frame(&mut g, 3);
@@ -613,6 +642,9 @@ fn accuracy_and_speed(gpu: &Gpu) {
         ("three variations", simple_flame()),
         ("random", random_flame()),
         ("one bright pixel", point_flame()),
+        ("4 points", spread_flame(4)),
+        ("16 points", spread_flame(16)),
+        ("64 points", spread_flame(64)),
     ] {
         let started = Instant::now();
         let _ = raw_histogram(&g, &perf);
