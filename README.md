@@ -4,9 +4,8 @@ A modern take on [Apophysis](https://en.wikipedia.org/wiki/Apophysis_(software))
 random fractal flames, refine the one you like, and render it at any size. Written in Rust.
 
 > **Status: early.** The flame explorer works end to end (app, command line, file formats), but
-> there is no release yet and no license has been chosen. See [docs/PLAN.md](docs/PLAN.md) for
-> the road to feature complete. It is developed and tested on macOS; Windows and Linux are
-> planned.
+> there is no release yet. See [docs/PLAN.md](docs/PLAN.md) for the road to feature complete.
+> Targets are macOS, Windows and Linux; so far it is developed and tested on macOS.
 
 ![Explore: a gallery of random flames](docs/images/explore.png)
 
@@ -29,6 +28,7 @@ again bigger and cleaner.
 - [Project layout](#project-layout)
 - [Development](#development)
 - [Known limitations](#known-limitations)
+- [License](#license)
 - [Credits](#credits)
 
 ## Build and run
@@ -252,10 +252,14 @@ Moth's own window, never the desktop. The window stays on top while it runs.
   the full list and order.
 - Brightness and gamma are Moth's own scaling, so an imported flame will not look pixel-identical to
   Apophysis yet.
-- The renderer runs on the CPU only.
+- The renderer runs on the CPU only. A GPU renderer is required for 1.0 and is planned.
 - Faint blurry specks can appear in the dark areas of some flames.
 - No history or favorites yet: the gallery is not saved between runs. Save a `.flame` or export an
   image to keep one. (History is designed in the plan.)
+
+## License
+
+Moth is released under the [MIT License](LICENSE).
 
 ## Credits
 

@@ -73,16 +73,22 @@ Known issues carried into the plan:
 5. **Everything long-running is a job.** Previews, exports and (later) batches all go through
    cancellable background jobs, so the UI never blocks and a queue is a thin layer.
 6. **Measure, then optimize.** Performance work starts from a benchmark and ends with one.
+7. **Three platforms from day one.** Every step must work on macOS, Windows and Linux, and CI
+   enforces it. Platform-specific code (data folders, file managers, GPU backends, shortcut
+   labels) is isolated and tested.
 
 ## Milestone 0: foundation (do first)
 
 | # | Step | Size | Done when |
 |---|------|------|-----------|
-| 0.1 | Choose the license (currently a placeholder `MIT`); add `LICENSE`. Verify the licenses of flam3 and Apophysis 7X so the clean-room rule is grounded in fact. | S | `LICENSE` committed; note in `docs/` recording what was checked. |
-| 0.2 | CI on GitHub Actions: `fmt --check`, `clippy -D warnings`, `test` on macOS, Linux and Windows. Fix the existing clippy warnings first. | M | Green CI on all three platforms for `main`. |
+| 0.1 | ~~Choose the license.~~ **Decided: MIT** (2026-10-22); `LICENSE` added and every crate declares it. Still to do: verify the licenses of flam3 and Apophysis 7X so the clean-room rule rests on fact. | S | `LICENSE` committed (done); a note in `docs/` records what was checked about flam3 and Apophysis. |
+| 0.2 | CI on GitHub Actions: `fmt --check`, `clippy -D warnings`, `test` on **macOS, Linux and Windows**. Fix the existing clippy warnings first. Where a runner has no GPU, GPU tests use a software adapter (for example Mesa lavapipe on Linux, WARP on Windows); checks that need real hardware are run locally and listed in the release checklist. | M | Green CI on all three platforms for `main`. |
 | 0.3 | Move the self-test into CI as a headless job where a display is available (or keep it local and document it). | S | `MOTH_SMOKE` result is part of the release checklist. |
 | 0.4 | ~~`README.md`: what Moth is, how to build and run, the CLI, the file format.~~ **Done**: the README covers building, the app, the CLI, formats and rendering. Keep it current as each feature lands. | S | A new contributor can build and render a flame from the README alone (checked). |
 | 0.5 | Replace emoji in the UI with an icon font or drawn icons, so no glyph can go missing. | S | No empty boxes anywhere; checked by screenshot in the self-test. |
+| 0.6 | **GPU feasibility spike.** The GPU renderer is required for 1.0, so retire its biggest risks first. A throwaway wgpu compute program on Metal, Vulkan and DX12 that runs the chaos game for two or three variations into an atomic `u32` histogram. Measure samples per second against the CPU, atomic contention on bright pixels, and precision (f32 on the GPU against f64 on the CPU). | L | A short report in `docs/` with measured numbers per platform, the chosen histogram layout, and a go or adjust decision for steps 3.4 to 3.6. |
+| 0.7 | **One definition per variation.** Today each variation is hand-written Rust. Before adding more (step 2.2) and parameters (step 2.1), choose a form that produces both the Rust and the WGSL from a single definition, such as a small DSL or a build-time generator, so the CPU and GPU cannot drift. Port the existing 26 to it. | L | The 26 variations come from one source; the paper-conformance test still passes; a GPU render of each variation matches the CPU within tolerance. |
+| 0.8 | **Cross-platform audit.** Platform data folder (via the `directories` crate), file dialogs, reveal in the file manager (already done for all three), shortcut labels (the app and README show `⌘Z` everywhere; show `Ctrl+Z` on Windows and Linux), fonts and HiDPI, and the self-test on Linux under a virtual display. | M | The self-test passes on all three platforms; no macOS-only wording appears on Windows or Linux. |
 
 ## Milestone 1: persistence, history and favorites
 
@@ -94,7 +100,7 @@ before more features.
 | 1.1 | **Library store** in `moth-core`: SQLite (via `rusqlite`, bundled) in the platform data directory (for example `~/Library/Application Support/Moth` on macOS). Tables for flames (id, content hash, flame XML, name, created, last selected, parent id, favorite, note) and rendered files. Thumbnails are PNG files next to the database, keyed by id. | L | Unit tests cover insert, dedupe by content hash, lookup, delete and migration from version 1; the store survives being killed mid-write. |
 | 1.2 | **Record selections.** Whenever a flame is selected in Explore (and whenever an edit is committed in Refine) it is stored. Identical flames are deduplicated by hash and just bump `last selected`; edits are saved as new entries with a `parent id`, so lineage is kept. | M | Selecting five flames and editing one creates the expected rows; selecting the same flame twice creates none. |
 | 1.3 | **History tab.** A second top-level tab beside the stage stepper (`Create` and `History`). A grid of past flames, newest first, with thumbnails; actions: open in Refine, send to Explore as a new batch, favorite, delete, show lineage. Search by name or note; filter by favorites. | L | A flame selected yesterday can be found today and reopened exactly as it was; verified by closing and restarting the app in the self-test. |
-| 1.4 | **Retention and size.** Unlimited by default. A storage indicator, "clear history" that keeps favorites, and an optional cap. | S | Clearing history never removes a favorite; the cap is honored. |
+| 1.4 | **Retention.** History is unlimited (decided 2026-10-22). A storage indicator shows how much space it uses. Whenever there are entries older than 30 days, the History tab shows a dismissible banner offering to clear them, with the count and size, and **Clear them**, **Keep** and **Remind me in 7 days**. Favorites are never removed. A manual "clear all (keep favorites)" is also available. | S | The offer appears only when old entries exist; clearing removes exactly the old, non-favorite entries and their thumbnails; favorites and recent entries are untouched (tested). |
 | 1.5 | **Favorites** as a filter in History and a star on Explore cards. | S | Starred flames survive clearing history. |
 | 1.6 | **Settings persistence**: randomness settings, last export options, window size, theme, last used folders. | M | Everything the user sets is restored on the next launch. |
 | 1.7 | **Autosave and crash recovery** of the flame being refined. | M | Killing the app mid-edit and reopening offers the unsaved flame back. |
@@ -130,9 +136,11 @@ clutter. Open: retention defaults (see the end of this document).
 | 3.7 | **Cancel and progress** for every render job, with real percentages. | M | Cancelling an export stops it within a second and removes the partial file. |
 | 3.8 | **Post-process slot** in the pipeline for optional denoise or upscale, empty by default. | S | A test post-process (for example a simple sharpen) can be added without touching the renderer. |
 
-Risk: Milestone 3 is the largest and least certain. GPU atomics on a float or fixed-point
-histogram are the known bottleneck, and shader precision can change how a flame looks. The
-CPU path stays the reference throughout.
+The GPU renderer is a **requirement for 1.0** (decided 2026-10-22). The spike in step 0.6 and
+the single-source variations in step 0.7 come first so this milestone starts from measured
+facts. The CPU renderer stays: it is the reference the GPU is tested against and the fallback for
+machines without a usable adapter. Remaining risk: GPU atomics on the histogram are the known
+bottleneck, and shader precision can change how a flame looks.
 
 ## Milestone 4: more generators and user-defined math
 
@@ -165,7 +173,7 @@ this document.
 | # | Step | Size | Done when |
 |---|------|------|-----------|
 | 6.1 | App icon (a moth), About dialog with third-party licenses. | S | Shown on all platforms. |
-| 6.2 | Packaging: a macOS `.app` (signed and notarized if a developer account is available), a Windows installer, a Linux AppImage; release workflow in CI that builds them from a tag. | L | A tagged release produces downloadable artifacts for all three. |
+| 6.2 | Packaging for **macOS, Windows and Linux**: a macOS `.app` in a `.dmg`, a Windows installer plus a portable zip, a Linux AppImage; a release workflow in CI that builds them all from a tag. **Builds are unsigned for now** (decided 2026-10-22): the docs explain how to open an unsigned app on macOS (right-click Open, or clear the quarantine flag) and the SmartScreen prompt on Windows. Signing and notarization are deferred, and the workflow is kept ready to add them. | L | A tagged release produces downloadable, working artifacts for all three platforms. |
 | 6.3 | Documentation: user guide, file-format notes, architecture overview, contributing notes. | M | Each exists and links from the README. |
 | 6.4 | Performance and memory pass on the slowest machine we can test; update the stated budgets. | M | Budgets met or documented. |
 | 6.5 | Accessibility pass: keyboard-only use of every stage, contrast, readable text sizes. | M | Every stage can be driven from the keyboard. |
@@ -199,17 +207,24 @@ Run through this before calling it done.
 - [ ] Both themes, HiDPI, keyboard use.
 - [ ] CI green on three platforms; self-test passes.
 
-## Decisions needed from you
+## Decisions
 
-1. **License.** MIT is a placeholder. Permissive (MIT or Apache-2.0) or copyleft (GPL-3.0, which
-   would also let us reuse GPL-licensed work with attribution)?
-2. **History retention.** Unlimited by default with a "clear history" button, or capped (for
-   example the last 500 entries, favorites exempt)?
-3. **Is the GPU renderer a 1.0 requirement?** It is the biggest and riskiest item. Treating it as
-   required keeps the "feels instant" goal; treating it as optional would let us ship earlier on
-   the CPU.
-4. **Platforms.** All three (macOS, Windows, Linux) from the start, or macOS first?
-5. **Distribution.** A signed and notarized macOS build needs an Apple developer account. Is that
-   available?
-6. **Where should user data live?** The platform default is proposed. Say if you want it
-   somewhere synced (for example iCloud Drive) or configurable.
+Taken (2026-10-22):
+
+1. **License: MIT.**
+2. **GPU renderer: required for 1.0.** The CPU renderer stays as the reference and fallback.
+3. **History retention: unlimited**, with an offer to clear entries older than 30 days (favorites
+   are never cleared).
+4. **Signing: none for now.** macOS and Windows builds are unsigned; revisit later.
+5. **Platforms: macOS, Windows and Linux** from the start.
+
+Still open (a default is proposed for each; say if you want something else):
+
+- **Copyright line in `LICENSE`.** Currently "Moth contributors". Replace with your name if you
+  prefer.
+- **CPU architectures.** Proposed: macOS Apple Silicon and Intel, Windows x64, Linux x64.
+- **Machines with no usable GPU.** Proposed: Moth still runs, on the CPU renderer, and says so.
+  The alternative is to refuse to start.
+- **Where user data lives.** Proposed: the platform default folder, not synced and not
+  configurable at first.
+- **Windows packaging.** Proposed: an installer and a portable zip.
