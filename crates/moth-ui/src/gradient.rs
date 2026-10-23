@@ -68,7 +68,10 @@ pub fn editor(
             stops_changed = true;
         }
         if ui
-            .add_enabled(state.stops.len() < 12, egui::Button::new(icons::PLUS).small())
+            .add_enabled(
+                state.stops.len() < 12,
+                egui::Button::new(icons::PLUS).small(),
+            )
             .clicked()
         {
             state.stops = g.palette.sample_stops(state.stops.len() + 1);
