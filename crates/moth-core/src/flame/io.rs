@@ -312,6 +312,17 @@ mod tests {
         }
     }
 
+    /// The library dedupes by the XML text, so saving a reloaded flame must give the same text.
+    #[test]
+    fn saving_a_reloaded_flame_gives_the_same_text() {
+        for seed in 0..20 {
+            let g = randomize(&RandomSettings::default(), seed);
+            let xml = to_xml(&g);
+            let again = to_xml(&from_xml(&xml).unwrap().remove(0).genome);
+            assert_eq!(again, xml, "seed {seed}");
+        }
+    }
+
     #[test]
     fn reads_flam3_coefs_order_and_reports_unknown_variations() {
         let xml = r#"<flame name="t" size="100 100" center="0 0" scale="50">

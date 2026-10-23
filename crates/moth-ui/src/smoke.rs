@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use eframe::egui;
 use moth_core::flame::Variation;
 
-use crate::app::{MothApp, Stage};
+use crate::app::{MothApp, Stage, View};
 use crate::refine::Tab;
 
 pub struct Smoke {
@@ -105,6 +105,14 @@ impl Smoke {
                 let rows =
                     |app: &MothApp| app.library.as_ref().map_or(-1, |l| l.len().unwrap_or(-1));
                 self.base_rows = rows(app);
+                // Restart check: a previous run left its row count in the scratch folder.
+                if let Ok(text) = std::fs::read_to_string(self.dir.join("rows.txt")) {
+                    let before: i64 = text.trim().parse().unwrap_or(-2);
+                    self.check(
+                        self.base_rows == before,
+                        "library: rows from the last run are still here after a restart",
+                    );
+                }
                 for i in 0..5 {
                     app.select(i);
                 }
@@ -223,6 +231,30 @@ impl Smoke {
                 self.shoot(ctx, "7-explore-after");
             }
             14 => {
+                app.enter_history();
+                self.next();
+            }
+            15 if waited > Duration::from_millis(1500) => {
+                // Thumbnails are made in the background, a few per second; wait for them.
+                let rows = app.library.as_ref().map_or(-1, |l| l.len().unwrap_or(-1));
+                let shown = app.history.thumbs.textures_len();
+                self.check(
+                    app.view == View::History && rows == self.base_rows + 6,
+                    "history: the view opens and lists the library",
+                );
+                if shown < rows as usize && waited < Duration::from_secs(60) {
+                    return;
+                }
+                self.check(shown > 0, "history: thumbnails appear");
+                self.shoot(ctx, "8-history");
+            }
+            16 => {
+                app.view = View::Create;
+                self.next();
+            }
+            17 => {
+                let rows = app.library.as_ref().map_or(-1, |l| l.len().unwrap_or(-1));
+                let _ = std::fs::write(self.dir.join("rows.txt"), rows.to_string());
                 println!("SMOKE done, {} failure(s)", self.failures);
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 self.next();
@@ -242,7 +274,7 @@ impl Smoke {
                         app.cards.iter().filter(|c| c.texture.is_some()).count()
                     );
                 }
-                if waited > Duration::from_secs(40) && self.step < 15 {
+                if waited > Duration::from_secs(40) && self.step < 18 {
                     println!("SMOKE FAIL step {} timed out", self.step);
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     self.step = 99;

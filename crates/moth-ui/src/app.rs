@@ -12,6 +12,7 @@ use moth_core::output::BitDepth;
 use moth_core::{Image, RenderSpec};
 
 use crate::exporter::Exporter;
+use crate::history::{self, HistoryState};
 use crate::icons;
 use crate::refine::RefineState;
 use crate::render_stage::{Format, RenderStage};
@@ -29,6 +30,13 @@ const UNDO_HINT: &str = "Ctrl+Z";
 const REDO_HINT: &str = "Ctrl+Shift+Z";
 
 const GALLERY_SIZE: usize = 10;
+
+/// Which top-level view is showing: making flames, or the library's history.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum View {
+    Create,
+    History,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Stage {
@@ -133,6 +141,8 @@ pub struct MothApp {
     pub status: String,
     /// Every flame selected or edited is stored here. `None` if the library could not open.
     pub library: Option<Library>,
+    pub history: HistoryState,
+    pub view: View,
     /// The library id of the flame being refined; the parent of its next edit.
     pub refine_source: Option<i64>,
     smoke: Option<crate::smoke::Smoke>,
@@ -163,6 +173,8 @@ impl MothApp {
             preview: Preview::default(),
             status: library_note,
             library,
+            history: HistoryState::new(cc.egui_ctx.clone()),
+            view: View::Create,
             refine_source: None,
             smoke: crate::smoke::Smoke::from_env(),
         };
@@ -317,6 +329,34 @@ impl MothApp {
         self.selected = 0;
     }
 
+    /// Shows `genomes` as the gallery, with the first one selected, and switches to Explore.
+    pub fn show_batch(&mut self, genomes: Vec<Genome>) {
+        let generation = self.worker.next_gallery_generation();
+        self.cards = genomes
+            .iter()
+            .map(|g| Card {
+                genome: Some(g.clone()),
+                texture: None,
+            })
+            .collect();
+        for (slot, genome) in genomes.into_iter().enumerate() {
+            self.worker.submit(Job {
+                slot,
+                generation,
+                work: Work::Thumb { genome },
+            });
+        }
+        self.selected = 0;
+        self.view = View::Create;
+        self.stage = Stage::Explore;
+    }
+
+    /// Switches to the History view, first saving any edit in progress in Refine.
+    pub fn enter_history(&mut self) {
+        self.go(Stage::Explore);
+        self.view = View::History;
+    }
+
     fn open_file(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .add_filter("Flames and Moth images", &["flame", "png", "jpg", "jpeg"])
@@ -333,23 +373,7 @@ impl MothApp {
                 warnings.sort();
                 warnings.dedup();
                 let genomes: Vec<Genome> = flames.into_iter().map(|f| f.genome).take(60).collect();
-                let generation = self.worker.next_gallery_generation();
-                self.cards = genomes
-                    .iter()
-                    .map(|g| Card {
-                        genome: Some(g.clone()),
-                        texture: None,
-                    })
-                    .collect();
-                for (slot, genome) in genomes.into_iter().enumerate() {
-                    self.worker.submit(Job {
-                        slot,
-                        generation,
-                        work: Work::Thumb { genome },
-                    });
-                }
-                self.selected = 0;
-                self.stage = Stage::Explore;
+                self.show_batch(genomes);
                 self.status = if warnings.is_empty() {
                     format!("Opened {}", path.display())
                 } else {
@@ -469,7 +493,10 @@ impl eframe::App for MothApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(500));
         }
 
-        if self.stage == Stage::Explore && !ctx.egui_wants_keyboard_input() {
+        if self.view == View::Create
+            && self.stage == Stage::Explore
+            && !ctx.egui_wants_keyboard_input()
+        {
             if ctx.input(|i| i.key_pressed(Key::Space)) {
                 self.generate();
             }
@@ -480,13 +507,17 @@ impl eframe::App for MothApp {
 
         self.header(ui);
         self.footer(ui);
-        match self.stage {
-            Stage::Explore => explore::ui(self, ui),
-            Stage::Refine => {
-                refine::ui(self, ui);
-                self.record_refine_edits();
+        if self.view == View::History {
+            history::ui(self, ui);
+        } else {
+            match self.stage {
+                Stage::Explore => explore::ui(self, ui),
+                Stage::Refine => {
+                    refine::ui(self, ui);
+                    self.record_refine_edits();
+                }
+                Stage::Render => render_stage::ui(self, ui),
             }
-            Stage::Render => render_stage::ui(self, ui),
         }
 
         if let Some(mut smoke) = self.smoke.take() {
@@ -528,7 +559,28 @@ impl MothApp {
                     }
                 }
                 if let Some(stage) = target {
+                    self.view = View::Create;
                     self.go(stage);
+                }
+                let creating = self.view == View::Create;
+                if ui
+                    .add(egui::Button::selectable(
+                        creating,
+                        RichText::new("Create").size(15.0),
+                    ))
+                    .clicked()
+                {
+                    self.view = View::Create;
+                }
+                if ui
+                    .add(egui::Button::selectable(
+                        !creating,
+                        RichText::new("History").size(15.0),
+                    ))
+                    .clicked()
+                    && creating
+                {
+                    self.enter_history();
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.menu_button("File", |ui| {

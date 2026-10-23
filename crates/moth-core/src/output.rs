@@ -106,6 +106,29 @@ pub fn read_png_recipe(path: &Path) -> Result<Option<String>, OutputError> {
         .and_then(|c| c.get_text().ok()))
 }
 
+/// Reads an 8-bit PNG written by [`write_png`] back as RGBA, for thumbnails.
+pub fn read_png_rgba(path: &Path) -> Result<(u32, u32, Vec<u8>), OutputError> {
+    let mut reader = png::Decoder::new(std::io::BufReader::new(File::open(path)?)).read_info()?;
+    let mut buf = vec![0; reader.output_buffer_size().unwrap_or(0)];
+    let frame = reader.next_frame(&mut buf)?;
+    let pixels = &buf[..frame.buffer_size()];
+    let rgba = match frame.color_type {
+        png::ColorType::Rgba => pixels.to_vec(),
+        png::ColorType::Rgb => pixels
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .flat_map(|p| [p[0], p[1], p[2], 255])
+            .collect(),
+        other => {
+            return Err(OutputError::Format(format!(
+                "unexpected thumbnail colour {other:?}"
+            )));
+        }
+    };
+    Ok((frame.width, frame.height, rgba))
+}
+
 /// JPEG APP segment that carries the recipe: `APP15`, prefixed with the key and a NUL.
 const JPEG_RECIPE_SEGMENT: u8 = 15;
 

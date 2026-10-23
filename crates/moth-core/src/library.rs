@@ -128,6 +128,39 @@ impl Library {
         Ok(self.len()? == 0)
     }
 
+    /// Flames, newest selection first. `search` matches name or note (case-insensitive);
+    /// `favorites_only` keeps only starred flames.
+    pub fn list(&self, search: &str, favorites_only: bool) -> Result<Vec<Stored>> {
+        let pattern = format!("%{}%", search.replace('%', "\\%").replace('_', "\\_"));
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, xml, created, last_selected, parent_id, favorite, note
+             FROM flames
+             WHERE (name LIKE ?1 ESCAPE '\\' OR note LIKE ?1 ESCAPE '\\')
+               AND (?2 = 0 OR favorite = 1)
+             ORDER BY last_selected DESC, id DESC",
+        )?;
+        let rows = stmt.query_map(params![pattern, favorites_only], row_to_stored)?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Stars or unstars a flame. Returns whether the flame exists.
+    pub fn set_favorite(&mut self, id: i64, favorite: bool) -> Result<bool> {
+        let changed = self.conn.execute(
+            "UPDATE flames SET favorite = ?2 WHERE id = ?1",
+            params![id, favorite],
+        )?;
+        Ok(changed > 0)
+    }
+
+    /// Replaces a flame's note. Returns whether the flame exists.
+    pub fn set_note(&mut self, id: i64, note: &str) -> Result<bool> {
+        let changed = self.conn.execute(
+            "UPDATE flames SET note = ?2 WHERE id = ?1",
+            params![id, note],
+        )?;
+        Ok(changed > 0)
+    }
+
     /// Runs SQLite's integrity check. True when the database is intact.
     pub fn is_intact(&self) -> Result<bool> {
         let verdict: String = self
@@ -347,6 +380,47 @@ mod tests {
         }
         let lib = Library::open(dir.path()).unwrap();
         assert_eq!(lib.len().unwrap(), 1);
+    }
+
+    #[test]
+    fn list_is_newest_first_and_searches_name_and_note() {
+        let (_dir, mut lib) = open_temp();
+        let a = lib.record(&xml(1), "sunrise", None, 10).unwrap();
+        let b = lib.record(&xml(2), "river", None, 20).unwrap();
+        lib.set_note(a, "100% warm").unwrap();
+        let all: Vec<i64> = lib.list("", false).unwrap().iter().map(|s| s.id).collect();
+        assert_eq!(all, vec![b, a], "newest selection first");
+        let by_name: Vec<i64> = lib
+            .list("river", false)
+            .unwrap()
+            .iter()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(by_name, vec![b]);
+        let by_note: Vec<i64> = lib
+            .list("WARM", false)
+            .unwrap()
+            .iter()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(by_note, vec![a], "search ignores case and matches notes");
+        assert_eq!(lib.list("100%", false).unwrap().len(), 1, "% is literal");
+        assert!(lib.list("100_", false).unwrap().is_empty(), "_ is literal");
+    }
+
+    #[test]
+    fn favorites_filter_and_toggle() {
+        let (_dir, mut lib) = open_temp();
+        let a = lib.record(&xml(1), "", None, 1).unwrap();
+        let b = lib.record(&xml(2), "", None, 2).unwrap();
+        assert!(lib.set_favorite(a, true).unwrap());
+        let favs: Vec<i64> = lib.list("", true).unwrap().iter().map(|s| s.id).collect();
+        assert_eq!(favs, vec![a]);
+        assert!(lib.get(a).unwrap().unwrap().favorite);
+        lib.set_favorite(a, false).unwrap();
+        assert!(lib.list("", true).unwrap().is_empty());
+        assert!(!lib.set_favorite(999, true).unwrap(), "missing flame");
+        assert!(lib.get(b).unwrap().is_some());
     }
 
     #[test]
