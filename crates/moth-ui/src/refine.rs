@@ -8,6 +8,7 @@ use moth_core::flame::{Genome, Variation, Xform, auto_frame};
 
 use crate::app::{MothApp, Preview};
 use crate::gradient::{self, GradientState};
+use crate::icons;
 use crate::worker::{PreviewSpec, Worker};
 
 const PREVIEW_WIDTH: u32 = 640;
@@ -376,7 +377,7 @@ fn xform_editor(ui: &mut egui::Ui, x: &mut Xform) {
             ui.add_sized([86.0, 18.0], egui::Label::new(v.name()));
             ui.add(slider(w, 0.0..=2.0, 2));
             if ui
-                .add_enabled(!only_one, egui::Button::new("×").small())
+                .add_enabled(!only_one, egui::Button::new(icons::X).small())
                 .clicked()
             {
                 remove = Some(i);

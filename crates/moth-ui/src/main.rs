@@ -2,6 +2,7 @@ mod app;
 mod explore;
 mod exporter;
 mod gradient;
+mod icons;
 mod refine;
 mod render_stage;
 mod smoke;

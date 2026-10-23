@@ -5,6 +5,8 @@
 use eframe::egui::{self, Color32, CornerRadius, Sense, vec2};
 use moth_core::flame::{Genome, Palette};
 
+use crate::icons;
+
 const DEFAULT_STOPS: usize = 8;
 
 #[derive(Default)]
@@ -56,14 +58,17 @@ pub fn editor(
     ui.horizontal(|ui| {
         ui.weak("Stops");
         if ui
-            .add_enabled(state.stops.len() > 3, egui::Button::new("−").small())
+            .add_enabled(
+                state.stops.len() > 3,
+                egui::Button::new(icons::MINUS).small(),
+            )
             .clicked()
         {
             state.stops = g.palette.sample_stops(state.stops.len() - 1);
             stops_changed = true;
         }
         if ui
-            .add_enabled(state.stops.len() < 12, egui::Button::new("+").small())
+            .add_enabled(state.stops.len() < 12, egui::Button::new(icons::PLUS).small())
             .clicked()
         {
             state.stops = g.palette.sample_stops(state.stops.len() + 1);
@@ -78,33 +83,39 @@ pub fn editor(
 
     ui.add_space(8.0);
     ui.horizontal_wrapped(|ui| {
-        if ui.button("🎲 Randomize").clicked() {
+        if ui
+            .button(format!("{} Randomize", icons::DICE_FIVE))
+            .clicked()
+        {
             *seed += 1;
             g.palette = Palette::random_seeded(*seed);
             changed = true;
         }
-        if ui.button("⇄ Reverse").clicked() {
+        if ui
+            .button(format!("{} Reverse", icons::ARROWS_LEFT_RIGHT))
+            .clicked()
+        {
             g.palette.reverse();
             changed = true;
         }
     });
     ui.horizontal(|ui| {
         ui.label("Hue");
-        if ui.button("◀").clicked() {
+        if ui.button(icons::CARET_LEFT).clicked() {
             g.palette.shift_hue(-0.04);
             changed = true;
         }
-        if ui.button("▶").clicked() {
+        if ui.button(icons::CARET_RIGHT).clicked() {
             g.palette.shift_hue(0.04);
             changed = true;
         }
         ui.add_space(12.0);
         ui.label("Slide");
-        if ui.button("◀").clicked() {
+        if ui.button(icons::CARET_LEFT).clicked() {
             g.palette.rotate(-1.0 / 32.0);
             changed = true;
         }
-        if ui.button("▶").clicked() {
+        if ui.button(icons::CARET_RIGHT).clicked() {
             g.palette.rotate(1.0 / 32.0);
             changed = true;
         }

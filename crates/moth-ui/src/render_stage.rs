@@ -5,6 +5,7 @@ use eframe::egui::{self, Color32, CornerRadius, Rect, Sense, pos2, vec2};
 
 use crate::app::{MothApp, Preview};
 use crate::exporter::{Exporter, State};
+use crate::icons;
 use crate::worker::PreviewSpec;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -223,16 +224,16 @@ fn queue(ui: &mut egui::Ui, exporter: &Exporter) {
         ui.horizontal(|ui| {
             match &item.state {
                 State::Queued => {
-                    ui.label("⏳");
+                    ui.label(icons::HOURGLASS);
                 }
                 State::Rendering => {
                     ui.spinner();
                 }
                 State::Done => {
-                    ui.label("✅");
+                    ui.label(icons::CHECK_CIRCLE);
                 }
                 State::Failed(_) => {
-                    ui.label("❌");
+                    ui.label(icons::X_CIRCLE);
                 }
             }
             ui.vertical(|ui| {

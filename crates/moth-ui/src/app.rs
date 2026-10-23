@@ -10,6 +10,7 @@ use moth_core::output::BitDepth;
 use moth_core::{Image, RenderSpec};
 
 use crate::exporter::Exporter;
+use crate::icons;
 use crate::refine::RefineState;
 use crate::render_stage::{Format, RenderStage};
 use crate::worker::{Done, Job, PreviewSpec, Work, Worker};
@@ -112,6 +113,7 @@ pub struct MothApp {
 
 impl MothApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        icons::install(&cc.egui_ctx);
         let seed = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs() % 1_000_000)
@@ -444,7 +446,7 @@ impl MothApp {
                 .enumerate()
                 {
                     if n > 0 {
-                        ui.weak("→");
+                        ui.weak(icons::ARROW_RIGHT);
                     }
                     let active = self.stage == stage;
                     let text = RichText::new(format!("{}  {label}", n + 1)).size(15.0);
@@ -486,7 +488,7 @@ impl MothApp {
                 match self.stage {
                     Stage::Explore => {
                         if ui
-                            .button("✨ Generate new")
+                            .button(format!("{} Generate new", icons::SPARKLE))
                             .on_hover_text("Space")
                             .clicked()
                         {
@@ -494,7 +496,10 @@ impl MothApp {
                         }
                         let has = self.has_selection();
                         if ui
-                            .add_enabled(has, egui::Button::new("🧬 Evolve selected"))
+                            .add_enabled(
+                                has,
+                                egui::Button::new(format!("{} Evolve selected", icons::DNA)),
+                            )
                             .on_hover_text("E")
                             .clicked()
                         {
@@ -510,26 +515,38 @@ impl MothApp {
                     }
                     Stage::Refine => {
                         if ui
-                            .add_enabled(self.refine.can_undo(), egui::Button::new("↶ Undo"))
+                            .add_enabled(
+                                self.refine.can_undo(),
+                                egui::Button::new(format!("{} Undo", icons::ARROW_U_UP_LEFT)),
+                            )
                             .on_hover_text("⌘Z")
                             .clicked()
                         {
                             self.refine.undo();
                         }
                         if ui
-                            .add_enabled(self.refine.can_redo(), egui::Button::new("↷ Redo"))
+                            .add_enabled(
+                                self.refine.can_redo(),
+                                egui::Button::new(format!("{} Redo", icons::ARROW_U_UP_RIGHT)),
+                            )
                             .on_hover_text("⇧⌘Z")
                             .clicked()
                         {
                             self.refine.redo();
                         }
                         ui.separator();
-                        if ui.button("← Back to Explore").clicked() {
+                        if ui
+                            .button(format!("{} Back to Explore", icons::ARROW_LEFT))
+                            .clicked()
+                        {
                             self.go(Stage::Explore);
                         }
                     }
                     Stage::Render => {
-                        if ui.button("← Back to Refine").clicked() {
+                        if ui
+                            .button(format!("{} Back to Refine", icons::ARROW_LEFT))
+                            .clicked()
+                        {
                             self.go(Stage::Refine);
                         }
                     }
@@ -541,14 +558,20 @@ impl MothApp {
                     match self.stage {
                         Stage::Explore => {
                             if ui
-                                .add_enabled(self.has_selection(), primary("Refine this →"))
+                                .add_enabled(
+                                    self.has_selection(),
+                                    primary(&format!("Refine this {}", icons::ARROW_RIGHT)),
+                                )
                                 .clicked()
                             {
                                 self.go(Stage::Refine);
                             }
                         }
                         Stage::Refine => {
-                            if ui.add(primary("Render →")).clicked() {
+                            if ui
+                                .add(primary(&format!("Render {}", icons::ARROW_RIGHT)))
+                                .clicked()
+                            {
                                 self.go(Stage::Render);
                             }
                         }
