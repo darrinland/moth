@@ -20,13 +20,27 @@ fn main() -> eframe::Result {
         viewport = viewport.with_icon(icon);
     }
     if std::env::var_os("MOTH_SMOKE").is_some() {
-        // A covered window stops repainting, which would stall the self-test.
-        viewport = viewport.with_always_on_top();
+        // The self-test must not take focus from whatever the user is doing. The window opens
+        // inactive and off screen, and is never raised.
+        viewport = viewport
+            .with_active(false)
+            .with_taskbar(false)
+            .with_position([-3000.0, 100.0]);
     }
-    let options = eframe::NativeOptions {
+    let mut options = eframe::NativeOptions {
         viewport,
         ..Default::default()
     };
+    #[cfg(target_os = "macos")]
+    if std::env::var_os("MOTH_SMOKE").is_some() {
+        // An accessory app has no Dock icon and never becomes the frontmost app.
+        options.event_loop_builder = Some(Box::new(|builder| {
+            use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
+            builder
+                .with_activation_policy(ActivationPolicy::Accessory)
+                .with_activate_ignoring_other_apps(false);
+        }));
+    }
     eframe::run_native(
         "Moth",
         options,

@@ -231,6 +231,11 @@ impl Smoke {
                 self.shoot(ctx, "7-explore-after");
             }
             14 => {
+                // One flame last selected 40 days ago, so History shows the clearing banner.
+                if let Some(lib) = app.library.as_mut() {
+                    let old = moth_core::library::now() - 40 * moth_core::library::DAY;
+                    let _ = lib.record("<flame name=\"smoke-old\"/>", "smoke-old", None, old);
+                }
                 app.enter_history();
                 self.next();
             }
@@ -239,16 +244,33 @@ impl Smoke {
                 let rows = app.library.as_ref().map_or(-1, |l| l.len().unwrap_or(-1));
                 let shown = app.history.thumbs.textures_len();
                 self.check(
-                    app.view == View::History && rows == self.base_rows + 6,
+                    app.view == View::History && rows == self.base_rows + 7,
                     "history: the view opens and lists the library",
                 );
-                if shown < rows as usize && waited < Duration::from_secs(60) {
+                if shown < (rows as usize).saturating_sub(1) && waited < Duration::from_secs(60) {
                     return;
                 }
                 self.check(shown > 0, "history: thumbnails appear");
                 self.shoot(ctx, "8-history");
             }
             16 => {
+                let offered = app
+                    .library
+                    .as_ref()
+                    .and_then(|l| l.retention_offer(moth_core::library::now()).ok().flatten());
+                self.check(
+                    offered.is_some_and(|u| u.count == 1),
+                    "history: the offer counts the one old flame",
+                );
+                let cleared = app.library.as_mut().and_then(|l| {
+                    l.clear_older_than(moth_core::library::now() - moth_core::library::STALE_AFTER)
+                        .ok()
+                });
+                let rows = app.library.as_ref().map_or(-1, |l| l.len().unwrap_or(-1));
+                self.check(
+                    cleared.is_some_and(|u| u.count == 1) && rows == self.base_rows + 6,
+                    "history: clearing removes only the old flame",
+                );
                 app.view = View::Create;
                 self.next();
             }

@@ -11,7 +11,7 @@ use eframe::egui::{self, Color32, ColorImage, RichText, TextureHandle, TextureOp
 use moth_core::RenderSpec;
 use moth_core::flame::{FlameGenerator, Genome, io};
 use moth_core::generator::Generator;
-use moth_core::library::Stored;
+use moth_core::library::{self, Stored, Usage};
 use moth_core::output::{self, BitDepth};
 
 use crate::app::{MothApp, Stage};
@@ -97,6 +97,11 @@ impl Thumbs {
     }
 
     /// Drops a flame's thumbnail, for when it is deleted.
+    fn forget_all(&mut self) {
+        self.textures.clear();
+        self.requested.clear();
+    }
+
     fn forget(&mut self, id: i64) {
         self.textures.remove(&id);
         self.requested.remove(&id);
@@ -145,6 +150,18 @@ pub struct HistoryState {
     note_draft: String,
     note_for: Option<i64>,
     confirm_delete: Option<i64>,
+    /// Storage figures and the clearing offer, read once and again after anything changes.
+    retention: Option<Retention>,
+    /// "Keep" hides the banner until the next launch.
+    banner_dismissed: bool,
+    confirm_clear_all: bool,
+}
+
+/// What the retention banner and the storage indicator show.
+#[derive(Clone, Copy)]
+struct Retention {
+    storage: u64,
+    offer: Option<Usage>,
 }
 
 impl HistoryState {
@@ -157,7 +174,15 @@ impl HistoryState {
             note_draft: String::new(),
             note_for: None,
             confirm_delete: None,
+            retention: None,
+            banner_dismissed: false,
+            confirm_clear_all: false,
         }
+    }
+
+    /// Forces the storage figures and the offer to be read again.
+    pub fn refresh(&mut self) {
+        self.retention = None;
     }
 }
 
@@ -169,6 +194,12 @@ enum Action {
     AskDelete(i64),
     Delete(i64),
     SaveNote(i64, String),
+    ClearStale,
+    RemindLater,
+    DismissBanner,
+    AskClearAll,
+    CancelClearAll,
+    ClearAll,
 }
 
 pub fn ui(app: &mut MothApp, ui: &mut egui::Ui) {
@@ -189,6 +220,14 @@ pub fn ui(app: &mut MothApp, ui: &mut egui::Ui) {
         }
     };
     let mut actions = Vec::new();
+    if app.history.retention.is_none() {
+        let now = library::now();
+        app.history.retention = Some(Retention {
+            storage: library.storage_bytes(),
+            offer: library.retention_offer(now).ok().flatten(),
+        });
+    }
+    let retention = app.history.retention.expect("set above");
 
     egui::Panel::right("history-detail")
         .default_size(320.0)
@@ -197,6 +236,11 @@ pub fn ui(app: &mut MothApp, ui: &mut egui::Ui) {
         });
 
     egui::CentralPanel::default().show(ui, |ui| {
+        if let Some(offer) = retention.offer
+            && !app.history.banner_dismissed
+        {
+            banner(ui, offer, &mut actions);
+        }
         ui.horizontal(|ui| {
             ui.add(
                 egui::TextEdit::singleline(&mut app.history.search)
@@ -205,6 +249,18 @@ pub fn ui(app: &mut MothApp, ui: &mut egui::Ui) {
             );
             ui.toggle_value(&mut app.history.favorites_only, "Favorites");
             ui.weak(format!("{} flames", entries.len()));
+            ui.weak(format!("{} on disk", size_label(retention.storage)));
+            if app.history.confirm_clear_all {
+                ui.colored_label(Color32::LIGHT_RED, "Remove everything but favorites?");
+                if ui.button("Clear").clicked() {
+                    actions.push(Action::ClearAll);
+                }
+                if ui.button("Cancel").clicked() {
+                    actions.push(Action::CancelClearAll);
+                }
+            } else if ui.small_button("Clear all (keep favorites)").clicked() {
+                actions.push(Action::AskClearAll);
+            }
             if (!app.history.search.is_empty() || app.history.favorites_only)
                 && ui.small_button("Clear filters").clicked()
             {
@@ -235,6 +291,27 @@ pub fn ui(app: &mut MothApp, ui: &mut egui::Ui) {
     for action in actions {
         apply(app, action);
     }
+}
+
+fn banner(ui: &mut egui::Ui, offer: Usage, actions: &mut Vec<Action>) {
+    egui::Frame::group(ui.style()).show(ui, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(format!(
+                "{} flames not selected in the last 30 days use {}. Clear them? Favorites stay.",
+                offer.count,
+                size_label(offer.bytes)
+            ));
+            if ui.button("Clear them").clicked() {
+                actions.push(Action::ClearStale);
+            }
+            if ui.button("Keep").clicked() {
+                actions.push(Action::DismissBanner);
+            }
+            if ui.button("Remind me in 7 days").clicked() {
+                actions.push(Action::RemindLater);
+            }
+        });
+    });
 }
 
 fn card(app: &mut MothApp, ui: &mut egui::Ui, stored: &Stored, actions: &mut Vec<Action>) {
@@ -424,7 +501,44 @@ fn ancestors(app: &MothApp, stored: &Stored) -> Vec<Stored> {
 }
 
 fn apply(app: &mut MothApp, action: Action) {
+    app.history.refresh();
     match action {
+        Action::DismissBanner => app.history.banner_dismissed = true,
+        Action::AskClearAll => app.history.confirm_clear_all = true,
+        Action::CancelClearAll => app.history.confirm_clear_all = false,
+        Action::RemindLater => {
+            if let Some(library) = app.library.as_mut() {
+                match library.remind_later(library::now()) {
+                    Ok(()) => app.status = "Will ask again in 7 days".to_string(),
+                    Err(e) => app.status = format!("Could not save the reminder: {e}"),
+                }
+            }
+            app.history.banner_dismissed = true;
+        }
+        Action::ClearStale | Action::ClearAll => {
+            let all = matches!(action, Action::ClearAll);
+            app.history.confirm_clear_all = false;
+            let Some(library) = app.library.as_mut() else {
+                return;
+            };
+            let result = if all {
+                library.clear_all_but_favorites()
+            } else {
+                library.clear_older_than(library::now() - library::STALE_AFTER)
+            };
+            match result {
+                Ok(done) => {
+                    app.history.thumbs.forget_all();
+                    app.history.selected = None;
+                    app.status = format!(
+                        "Cleared {} flames, freeing {}",
+                        done.count,
+                        size_label(done.bytes)
+                    );
+                }
+                Err(e) => app.status = format!("Could not clear the library: {e}"),
+            }
+        }
         Action::Select(id) => {
             app.history.selected = Some(id);
             app.history.confirm_delete = None;
@@ -487,6 +601,21 @@ fn genome_of(app: &MothApp, id: i64) -> Option<Genome> {
     io::from_xml(&stored.xml).ok()?.pop().map(|f| f.genome)
 }
 
+/// A size such as `12 KB` or `3.4 MB`.
+fn size_label(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    let b = bytes as f64;
+    if b < KB {
+        format!("{bytes} B")
+    } else if b < KB * KB {
+        format!("{:.0} KB", b / KB)
+    } else if b < KB * KB * KB {
+        format!("{:.1} MB", b / (KB * KB))
+    } else {
+        format!("{:.2} GB", b / (KB * KB * KB))
+    }
+}
+
 /// A date as `YYYY-MM-DD HH:MM` (UTC), without a date library.
 fn date_label(unix: i64) -> String {
     let days = unix.div_euclid(86_400);
@@ -510,7 +639,14 @@ fn date_label(unix: i64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::date_label;
+    use super::{date_label, size_label};
+
+    #[test]
+    fn sizes_are_readable() {
+        assert_eq!(size_label(512), "512 B");
+        assert_eq!(size_label(2048), "2 KB");
+        assert_eq!(size_label(3 * 1024 * 1024 + 400_000), "3.4 MB");
+    }
 
     #[test]
     fn dates_are_civil() {

@@ -9,3 +9,6 @@ eframe = "0.37.0"
 moth-core = { version = "0.1.0", path = "../moth-core" }
 png = "0.18.1"
 rfd = "0.17.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+winit = { version = "0.30.13", default-features = false }

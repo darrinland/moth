@@ -14,7 +14,7 @@ use sha2::{Digest, Sha256};
 
 const DB_FILE: &str = "library.sqlite3";
 /// The schema version stored in `PRAGMA user_version`. Opening a newer database is refused.
-const VERSION: i64 = 1;
+const VERSION: i64 = 2;
 
 #[derive(Debug, thiserror::Error)]
 pub enum LibraryError {
@@ -29,6 +29,21 @@ pub enum LibraryError {
 }
 
 pub type Result<T> = std::result::Result<T, LibraryError>;
+
+/// Seconds in a day.
+pub const DAY: i64 = 86_400;
+/// Entries not selected for this long are offered for clearing.
+pub const STALE_AFTER: i64 = 30 * DAY;
+/// How long "Remind me later" stays quiet.
+pub const REMIND_AFTER: i64 = 7 * DAY;
+const KEY_REMIND_UNTIL: &str = "retention_remind_until";
+
+/// How many entries a clearing touches, and the space they use.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Usage {
+    pub count: i64,
+    pub bytes: u64,
+}
 
 /// A flame as stored.
 #[derive(Clone, Debug, PartialEq)]
@@ -161,6 +176,116 @@ impl Library {
         Ok(changed > 0)
     }
 
+    /// Non-favorite flames last selected before `cutoff` (unix seconds), and the space they use.
+    pub fn stale(&self, cutoff: i64) -> Result<Usage> {
+        let ids = self.stale_ids(cutoff)?;
+        self.usage_of(&ids)
+    }
+
+    /// Removes the non-favorite flames last selected before `cutoff`, with their thumbnails.
+    /// Favorites and newer flames are untouched. Returns what was removed.
+    pub fn clear_older_than(&mut self, cutoff: i64) -> Result<Usage> {
+        let ids = self.stale_ids(cutoff)?;
+        self.remove_all(&ids)
+    }
+
+    /// Removes every flame that is not a favorite. Returns what was removed.
+    pub fn clear_all_but_favorites(&mut self) -> Result<Usage> {
+        let ids = self.stale_ids(i64::MAX)?;
+        self.remove_all(&ids)
+    }
+
+    /// Disk space used by the library: the database files and every thumbnail.
+    pub fn storage_bytes(&self) -> u64 {
+        let mut total = 0;
+        for name in [DB_FILE, "library.sqlite3-wal", "library.sqlite3-shm"] {
+            total += file_len(&self.dir.join(name));
+        }
+        if let Ok(entries) = std::fs::read_dir(self.dir.join("thumbnails")) {
+            total += entries
+                .flatten()
+                .map(|e| e.metadata().map(|m| m.len()).unwrap_or(0))
+                .sum::<u64>();
+        }
+        total
+    }
+
+    /// Silences the clearing offer until `now` plus [`REMIND_AFTER`].
+    pub fn remind_later(&mut self, now: i64) -> Result<()> {
+        self.set_meta(KEY_REMIND_UNTIL, &(now + REMIND_AFTER).to_string())
+    }
+
+    /// Whether the clearing offer should show at `now`: stale entries exist and the reminder
+    /// delay (if any) has passed. Returns what the offer would clear.
+    pub fn retention_offer(&self, now: i64) -> Result<Option<Usage>> {
+        let until = self
+            .get_meta(KEY_REMIND_UNTIL)?
+            .and_then(|v| v.parse::<i64>().ok())
+            .unwrap_or(0);
+        if now < until {
+            return Ok(None);
+        }
+        let usage = self.stale(now - STALE_AFTER)?;
+        Ok((usage.count > 0).then_some(usage))
+    }
+
+    fn get_meta(&self, key: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row("SELECT value FROM meta WHERE key = ?1", params![key], |r| {
+                r.get(0)
+            })
+            .optional()?)
+    }
+
+    fn set_meta(&mut self, key: &str, value: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO meta (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        )?;
+        Ok(())
+    }
+
+    fn stale_ids(&self, cutoff: i64) -> Result<Vec<i64>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id FROM flames WHERE favorite = 0 AND last_selected < ?1")?;
+        let rows = stmt.query_map(params![cutoff], |r| r.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    fn usage_of(&self, ids: &[i64]) -> Result<Usage> {
+        let mut bytes = 0u64;
+        for &id in ids {
+            let xml_len: i64 = self.conn.query_row(
+                "SELECT length(CAST(xml AS BLOB)) FROM flames WHERE id = ?1",
+                params![id],
+                |r| r.get(0),
+            )?;
+            bytes += xml_len.max(0) as u64 + file_len(&self.thumbnail_path(id));
+        }
+        Ok(Usage {
+            count: ids.len() as i64,
+            bytes,
+        })
+    }
+
+    fn remove_all(&mut self, ids: &[i64]) -> Result<Usage> {
+        let usage = self.usage_of(ids)?;
+        let tx = self.conn.transaction()?;
+        for &id in ids {
+            tx.execute("DELETE FROM flames WHERE id = ?1", params![id])?;
+        }
+        tx.commit()?;
+        // Files go after the rows, so a crash in between leaves orphan thumbnails, never
+        // rows without them.
+        for &id in ids {
+            let _ = std::fs::remove_file(self.thumbnail_path(id));
+        }
+        Ok(usage)
+    }
+
     /// Runs SQLite's integrity check. True when the database is intact.
     pub fn is_intact(&self) -> Result<bool> {
         let verdict: String = self
@@ -186,6 +311,10 @@ fn row_to_stored(r: &rusqlite::Row<'_>) -> rusqlite::Result<Stored> {
         favorite: r.get::<_, i64>(6)? != 0,
         note: r.get(7)?,
     })
+}
+
+fn file_len(path: &Path) -> u64 {
+    std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
 }
 
 /// Lowercase hex SHA-256 of the flame's XML.
@@ -217,6 +346,12 @@ fn migrate(conn: &Connection) -> Result<()> {
         let tx = conn.unchecked_transaction()?;
         create_v1(&tx)?;
         tx.pragma_update(None, "user_version", 1)?;
+        tx.commit()?;
+    }
+    if version < 2 {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);")?;
+        tx.pragma_update(None, "user_version", 2)?;
         tx.commit()?;
     }
     Ok(())
@@ -439,5 +574,92 @@ mod tests {
             lib.thumbnail_path(7),
             dir.path().join("thumbnails").join("7.png")
         );
+    }
+
+    #[test]
+    fn a_version_1_database_gains_the_meta_table() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let conn = Connection::open(dir.path().join(DB_FILE)).unwrap();
+            let tx = conn.unchecked_transaction().unwrap();
+            create_v1(&tx).unwrap();
+            tx.pragma_update(None, "user_version", 1).unwrap();
+            tx.commit().unwrap();
+        }
+        let mut lib = Library::open(dir.path()).unwrap();
+        lib.remind_later(0).unwrap();
+        assert_eq!(lib.retention_offer(1).unwrap(), None);
+    }
+
+    fn with_thumb(lib: &Library, id: i64, len: usize) {
+        let path = lib.thumbnail_path(id);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, vec![0u8; len]).unwrap();
+    }
+
+    /// Old non-favorites go, with their thumbnails; favorites and recent flames stay.
+    #[test]
+    fn clearing_removes_exactly_the_old_non_favorites() {
+        let (_dir, mut lib) = open_temp();
+        let now = 100 * DAY;
+        let old = lib.record(&xml(1), "", None, now - 40 * DAY).unwrap();
+        let old_fav = lib.record(&xml(2), "", None, now - 50 * DAY).unwrap();
+        let recent = lib.record(&xml(3), "", None, now - 5 * DAY).unwrap();
+        let edge = lib.record(&xml(4), "", None, now - STALE_AFTER).unwrap();
+        lib.set_favorite(old_fav, true).unwrap();
+        for id in [old, old_fav, recent, edge] {
+            with_thumb(&lib, id, 1000);
+        }
+        let cutoff = now - STALE_AFTER;
+        let offer = lib.stale(cutoff).unwrap();
+        assert_eq!(offer.count, 1);
+        assert_eq!(offer.bytes, xml(1).len() as u64 + 1000);
+
+        let cleared = lib.clear_older_than(cutoff).unwrap();
+        assert_eq!(cleared, offer, "the offer states what clearing removes");
+        assert!(lib.get(old).unwrap().is_none());
+        assert!(!lib.thumbnail_path(old).exists());
+        for kept in [old_fav, recent, edge] {
+            assert!(lib.get(kept).unwrap().is_some());
+            assert!(lib.thumbnail_path(kept).exists());
+        }
+    }
+
+    #[test]
+    fn clear_all_keeps_favorites_only() {
+        let (_dir, mut lib) = open_temp();
+        let a = lib.record(&xml(1), "", None, 1).unwrap();
+        let b = lib.record(&xml(2), "", None, 2).unwrap();
+        let c = lib.record(&xml(3), "", None, i64::MAX - 1).unwrap();
+        lib.set_favorite(b, true).unwrap();
+        let cleared = lib.clear_all_but_favorites().unwrap();
+        assert_eq!(cleared.count, 2);
+        assert!(lib.get(a).unwrap().is_none() && lib.get(c).unwrap().is_none());
+        assert!(lib.get(b).unwrap().is_some());
+    }
+
+    #[test]
+    fn the_offer_needs_stale_entries_and_respects_the_reminder() {
+        let (_dir, mut lib) = open_temp();
+        let now = 100 * DAY;
+        lib.record(&xml(1), "", None, now - 5 * DAY).unwrap();
+        assert_eq!(lib.retention_offer(now).unwrap(), None, "nothing is old");
+        lib.record(&xml(2), "", None, now - 31 * DAY).unwrap();
+        assert_eq!(lib.retention_offer(now).unwrap().unwrap().count, 1);
+        lib.remind_later(now).unwrap();
+        assert_eq!(lib.retention_offer(now + 6 * DAY).unwrap(), None);
+        assert_eq!(
+            lib.retention_offer(now + 7 * DAY).unwrap().unwrap().count,
+            1
+        );
+    }
+
+    #[test]
+    fn storage_counts_database_and_thumbnails() {
+        let (_dir, mut lib) = open_temp();
+        let id = lib.record(&xml(1), "", None, 1).unwrap();
+        let before = lib.storage_bytes();
+        with_thumb(&lib, id, 5000);
+        assert_eq!(lib.storage_bytes(), before + 5000);
     }
 }

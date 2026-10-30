@@ -354,6 +354,7 @@ impl MothApp {
     /// Switches to the History view, first saving any edit in progress in Refine.
     pub fn enter_history(&mut self) {
         self.go(Stage::Explore);
+        self.history.refresh();
         self.view = View::History;
     }
 

@@ -243,7 +243,8 @@ undo restoring a flame exactly) and save screenshots of its own window, then qui
 MOTH_SMOKE=out/smoke ./target/release/moth-ui
 ```
 
-It prints `SMOKE ok` or `SMOKE FAIL` lines and writes numbered PNGs to the folder. It captures only
+The window opens off screen and inactive, and on macOS the app runs as an accessory app, so the
+self-test never takes focus from your other work. It prints `SMOKE ok` or `SMOKE FAIL` lines and writes numbered PNGs to the folder. It captures only
 Moth's own window, never the desktop. The window stays on top while it runs.
 
 ## Known limitations

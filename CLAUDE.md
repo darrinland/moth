@@ -21,3 +21,9 @@
 
 - Targets for 1.0 are macOS (Apple Silicon) and Windows (x64). Do not add Linux-specific work
   without asking; see `docs/PLAN.md`.
+
+## Testing the app
+
+- Run the self-test with `MOTH_SMOKE=<dir> ./target/release/moth-ui`. It opens off screen and
+  never takes focus (macOS accessory policy), so it is safe to run while the user works. Do not
+  add `with_always_on_top`, window raising or `osascript` activation to it.
