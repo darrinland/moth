@@ -20,6 +20,7 @@ pub const DNA: &str = "\u{E924}";
 pub const HOURGLASS: &str = "\u{E2B2}";
 pub const MINUS: &str = "\u{E32A}";
 pub const PLUS: &str = "\u{E3D4}";
+pub const STAR: &str = "\u{E46A}";
 pub const SPARKLE: &str = "\u{E6A2}";
 pub const X: &str = "\u{E4F6}";
 pub const X_CIRCLE: &str = "\u{E4F8}";

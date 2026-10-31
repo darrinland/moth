@@ -271,8 +271,31 @@ impl Smoke {
                     cleared.is_some_and(|u| u.count == 1) && rows == self.base_rows + 6,
                     "history: clearing removes only the old flame",
                 );
+                // A star on an Explore card survives clearing the whole history.
                 app.view = View::Create;
-                self.next();
+                app.toggle_card_star(3);
+                let hash = app.cards[3].hash.clone().unwrap_or_default();
+                let hash = if hash.is_empty() {
+                    moth_core::library::content_hash(&moth_core::flame::io::to_xml(
+                        app.cards[3].genome.as_ref().expect("card has a flame"),
+                    ))
+                } else {
+                    hash
+                };
+                self.check(
+                    app.favorite_hashes.contains(&hash),
+                    "favorites: starring a card marks it",
+                );
+                if let Some(l) = app.library.as_mut() {
+                    let _ = l.clear_all_but_favorites();
+                }
+                app.refresh_favorites();
+                let rows = app.library.as_ref().map_or(-1, |l| l.len().unwrap_or(-1));
+                self.check(
+                    rows == app.favorite_hashes.len() as i64 && app.favorite_hashes.contains(&hash),
+                    "favorites: the starred flame survives clearing",
+                );
+                self.shoot(ctx, "9-explore-star");
             }
             17 => {
                 let rows = app.library.as_ref().map_or(-1, |l| l.len().unwrap_or(-1));

@@ -49,6 +49,8 @@ pub enum Stage {
 pub struct Card {
     pub genome: Option<Genome>,
     pub texture: Option<TextureHandle>,
+    /// Content hash of the genome's `.flame` XML, worked out the first time it is needed.
+    pub hash: Option<String>,
 }
 
 /// What the user can steer in the randomizer.
@@ -142,6 +144,8 @@ pub struct MothApp {
     /// Every flame selected or edited is stored here. `None` if the library could not open.
     pub library: Option<Library>,
     pub history: HistoryState,
+    /// Content hashes of the starred flames, for the stars on Explore cards.
+    pub favorite_hashes: std::collections::HashSet<String>,
     pub view: View,
     /// The library id of the flame being refined; the parent of its next edit.
     pub refine_source: Option<i64>,
@@ -174,10 +178,12 @@ impl MothApp {
             status: library_note,
             library,
             history: HistoryState::new(cc.egui_ctx.clone()),
+            favorite_hashes: Default::default(),
             view: View::Create,
             refine_source: None,
             smoke: crate::smoke::Smoke::from_env(),
         };
+        app.refresh_favorites();
         app.generate();
         app
     }
@@ -188,6 +194,32 @@ impl MothApp {
         if let Some(genome) = self.cards.get(index).and_then(|c| c.genome.clone()) {
             self.remember(&genome, None);
         }
+    }
+
+    /// Reads which flames are starred again. Call after any change to the stars.
+    pub fn refresh_favorites(&mut self) {
+        if let Some(library) = self.library.as_ref() {
+            self.favorite_hashes = library.favorite_hashes().unwrap_or_default();
+        }
+    }
+
+    /// Stars or unstars card `index`, storing its flame first if it is not in the library yet.
+    pub fn toggle_card_star(&mut self, index: usize) {
+        let Some(genome) = self.cards.get(index).and_then(|c| c.genome.clone()) else {
+            return;
+        };
+        let xml = moth_core::flame::io::to_xml(&genome);
+        let starred = self
+            .favorite_hashes
+            .contains(&moth_core::library::content_hash(&xml));
+        if let Some(id) = self.remember(&genome, None)
+            && let Some(library) = self.library.as_mut()
+            && let Err(e) = library.set_favorite(id, !starred)
+        {
+            self.status = format!("Could not star the flame: {e}");
+        }
+        self.refresh_favorites();
+        self.history.refresh();
     }
 
     /// Stores `genome` in the library (a repeat only bumps its last-selected time) and returns
@@ -312,6 +344,7 @@ impl MothApp {
         self.cards[0] = Card {
             genome: Some(parent.clone()),
             texture: keep_texture,
+            hash: None,
         };
         for slot in 1..GALLERY_SIZE {
             let seed = self.take_seed();
@@ -337,6 +370,7 @@ impl MothApp {
             .map(|g| Card {
                 genome: Some(g.clone()),
                 texture: None,
+                hash: None,
             })
             .collect();
         for (slot, genome) in genomes.into_iter().enumerate() {

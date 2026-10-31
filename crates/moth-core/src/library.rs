@@ -286,6 +286,16 @@ impl Library {
         Ok(usage)
     }
 
+    /// Content hashes of every favorite, so a screen of flames can show their stars without
+    /// asking the database once per flame.
+    pub fn favorite_hashes(&self) -> Result<std::collections::HashSet<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT hash FROM flames WHERE favorite = 1")?;
+        let rows = stmt.query_map([], |r| r.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
     /// Runs SQLite's integrity check. True when the database is intact.
     pub fn is_intact(&self) -> Result<bool> {
         let verdict: String = self
@@ -556,6 +566,24 @@ mod tests {
         assert!(lib.list("", true).unwrap().is_empty());
         assert!(!lib.set_favorite(999, true).unwrap(), "missing flame");
         assert!(lib.get(b).unwrap().is_some());
+    }
+
+    #[test]
+    fn favorite_hashes_follow_the_stars_and_survive_clearing() {
+        let (_dir, mut lib) = open_temp();
+        let a = lib.record(&xml(1), "", None, 1).unwrap();
+        lib.record(&xml(2), "", None, 2).unwrap();
+        assert!(lib.favorite_hashes().unwrap().is_empty());
+        lib.set_favorite(a, true).unwrap();
+        let want: std::collections::HashSet<String> = [content_hash(&xml(1))].into();
+        assert_eq!(lib.favorite_hashes().unwrap(), want);
+        lib.clear_all_but_favorites().unwrap();
+        assert_eq!(
+            lib.favorite_hashes().unwrap(),
+            want,
+            "stars survive clearing"
+        );
+        assert_eq!(lib.len().unwrap(), 1);
     }
 
     #[test]

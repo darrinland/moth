@@ -2,9 +2,12 @@
 //! drawer that is closed until asked for.
 
 use eframe::egui::{self, Color32, CornerRadius, Rect, Sense, StrokeKind, pos2, vec2};
-use moth_core::flame::Variation;
+use moth_core::flame::{Variation, io};
+use moth_core::library;
 
 use crate::app::{MothApp, Settings, Stage};
+use crate::history::STAR_GOLD;
+use crate::icons;
 
 pub fn ui(app: &mut MothApp, ui: &mut egui::Ui) {
     if app.show_randomness {
@@ -18,7 +21,7 @@ pub fn ui(app: &mut MothApp, ui: &mut egui::Ui) {
 }
 
 fn gallery(app: &mut MothApp, ui: &mut egui::Ui) {
-    let (mut clicked, mut opened) = (None, None);
+    let (mut clicked, mut opened, mut starred) = (None, None, None);
     egui::ScrollArea::vertical().show(ui, |ui| {
         let spacing = 12.0;
         let avail = ui.available_width();
@@ -28,7 +31,7 @@ fn gallery(app: &mut MothApp, ui: &mut egui::Ui) {
         egui::Grid::new("gallery")
             .spacing([spacing, spacing])
             .show(ui, |ui| {
-                for (i, card) in app.cards.iter().enumerate() {
+                for (i, card) in app.cards.iter_mut().enumerate() {
                     let (rect, resp) = ui.allocate_exact_size(vec2(w, h), Sense::click());
                     match &card.texture {
                         Some(tex) => {
@@ -64,6 +67,41 @@ fn gallery(app: &mut MothApp, ui: &mut egui::Ui) {
                         stroke,
                         StrokeKind::Inside,
                     );
+                    if let Some(genome) = &card.genome {
+                        let hash = card
+                            .hash
+                            .get_or_insert_with(|| library::content_hash(&io::to_xml(genome)));
+                        let on = app.favorite_hashes.contains(hash.as_str());
+                        let spot = Rect::from_min_size(
+                            rect.right_top() + vec2(-30.0, 6.0),
+                            vec2(24.0, 24.0),
+                        );
+                        let star = ui
+                            .interact(spot, resp.id.with("star"), Sense::click())
+                            .on_hover_text(if on { "Unstar" } else { "Star" });
+                        if on || resp.hovered() || star.hovered() {
+                            ui.painter().circle_filled(
+                                spot.center(),
+                                12.0,
+                                Color32::from_black_alpha(150),
+                            );
+                            ui.painter().text(
+                                spot.center(),
+                                egui::Align2::CENTER_CENTER,
+                                icons::STAR,
+                                egui::FontId::proportional(16.0),
+                                if on {
+                                    STAR_GOLD
+                                } else {
+                                    Color32::from_gray(200)
+                                },
+                            );
+                        }
+                        if star.clicked() {
+                            starred = Some(i);
+                        }
+                    }
+                    // The star is drawn after the card, so it wins clicks over its own corner.
                     if resp.clicked() {
                         clicked = Some(i);
                     }
@@ -79,6 +117,9 @@ fn gallery(app: &mut MothApp, ui: &mut egui::Ui) {
             ui.weak("Nothing here yet. Generate a batch, or open a file.");
         }
     });
+    if let Some(i) = starred {
+        app.toggle_card_star(i);
+    }
     if let Some(i) = clicked {
         app.select(i);
     }

@@ -20,6 +20,8 @@ use crate::worker::THUMB_SIZE;
 
 /// Most flames one History action sends to Explore at once.
 const MAX_BATCH: usize = 60;
+/// The colour of a starred flame's star.
+pub const STAR_GOLD: Color32 = Color32::from_rgb(255, 190, 70);
 /// Width of one History card: the thumbnail plus its frame.
 const CARD_WIDTH: f32 = THUMB_SIZE.0 as f32 / 2.0 + 24.0;
 /// How far up the lineage the detail panel walks.
@@ -371,11 +373,11 @@ fn card(app: &mut MothApp, ui: &mut egui::Ui, stored: &Stored, actions: &mut Vec
                 stored.name.clone()
             };
             ui.horizontal(|ui| {
-                let star = if stored.favorite {
-                    icons::CHECK_CIRCLE
+                let star = RichText::new(icons::STAR).color(if stored.favorite {
+                    STAR_GOLD
                 } else {
-                    icons::SPARKLE
-                };
+                    Color32::GRAY
+                });
                 if ui.small_button(star).on_hover_text("Favorite").clicked() {
                     actions.push(Action::Star(stored.id, !stored.favorite));
                 }
@@ -502,6 +504,18 @@ fn ancestors(app: &MothApp, stored: &Stored) -> Vec<Stored> {
 
 fn apply(app: &mut MothApp, action: Action) {
     app.history.refresh();
+    // Stars may change below; the Explore cards read the refreshed set on the next frame.
+    let refresh_stars = matches!(
+        action,
+        Action::Star(..) | Action::Delete(_) | Action::ClearStale | Action::ClearAll
+    );
+    apply_action(app, action);
+    if refresh_stars {
+        app.refresh_favorites();
+    }
+}
+
+fn apply_action(app: &mut MothApp, action: Action) {
     match action {
         Action::DismissBanner => app.history.banner_dismissed = true,
         Action::AskClearAll => app.history.confirm_clear_all = true,
